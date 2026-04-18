@@ -29,13 +29,19 @@
 - [ ] Run `rails db:create db:migrate db:seed` in terminal
 - [ ] Run `rails generate devise:views` for auth pages
 
-### UI (next major phase)
-- [ ] `app/views/layouts/application.html.erb` — update for TailwindCSS + Turbo
-- [ ] `app/views/layouts/dashboard.html.erb` — sidebar nav, responsive
-- [ ] `app/views/layouts/public.html.erb` — mobile-first, Spanish
-- [ ] Dashboard views: bookings/index, bookings/show, customers/index, etc.
-- [ ] Public booking page: service picker → time slot picker → form → confirmation
-- [ ] Devise views customized in Spanish
+### UI (completed)
+- [x] `app/views/layouts/application.html.erb` — Tailwind v4 theme, Google Fonts (Fraunces + Plus Jakarta Sans)
+- [x] `app/views/layouts/dashboard.html.erb` — forest sidebar + cream content, mobile drawer (Stimulus)
+- [x] `app/views/layouts/public.html.erb` — mobile-first, Spanish, privacy footer
+- [x] Dashboard bookings: index (filter tabs, booking rows), show (confirm/cancel actions), new, edit, _form
+- [x] Dashboard customers: index (search), show (profile + history), new, edit, _form
+- [x] Dashboard services: index (cards + toggle), new, edit, _form
+- [x] Public booking page: 3-step flow (service → datetime → customer details), Stimulus controller
+- [x] Public confirmation page: WhatsApp reminder info
+- [x] Devise views: sessions/new, registrations/new+edit, passwords/new+edit — all in Spanish
+- [x] `ApplicationHelper`: `dashboard_nav_link`, `booking_status_badge`, `whatsapp_link`
+- [x] Stimulus controllers: `sidebar_controller.js`, `booking_flow_controller.js`
+- [x] Tailwind v4 `@theme`: brand colors + custom fonts
 
 ### Integrations (when credentials are added)
 - [ ] Twilio WhatsApp templates submitted to Meta

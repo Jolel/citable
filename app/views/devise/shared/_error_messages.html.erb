@@ -1,0 +1,12 @@
+<% if resource.errors.any? %>
+  <div class="mb-5 rounded-xl border border-red-200 bg-red-50 p-4">
+    <p class="text-sm font-semibold text-red-800 mb-2">
+      <%= pluralize(resource.errors.count, "error impidió continuar", "errores impidieron continuar") %>:
+    </p>
+    <ul class="list-disc list-inside space-y-1">
+      <% resource.errors.full_messages.each do |message| %>
+        <li class="text-sm text-red-700"><%= message %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>

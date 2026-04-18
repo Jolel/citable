@@ -1,0 +1,108 @@
+<% content_for :title, "Servicios — #{current_account.name}" %>
+
+<%# ── Page header ──────────────────────────────── %>
+<div class="flex items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="font-fraunces text-2xl font-light text-forest">Servicios</h1>
+    <p class="text-sm text-forest/50 mt-0.5">Los servicios que ofrece tu negocio</p>
+  </div>
+  <%= link_to new_dashboard_service_path,
+      class: "inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-light transition-colors shrink-0" do %>
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+    Nuevo servicio
+  <% end %>
+</div>
+
+<%# Tier notice if on free plan %>
+<% if current_account.free? && @services.size >= 3 %>
+  <div class="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-muted px-5 py-4">
+    <svg class="w-5 h-5 text-amber shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/>
+    </svg>
+    <div>
+      <p class="text-sm font-semibold text-forest">Alcanzaste el límite del plan Libre</p>
+      <p class="text-sm text-forest/60 mt-0.5">
+        El plan Libre incluye hasta 3 servicios.
+        <%= link_to "Actualiza a Pro", dashboard_settings_path, class: "text-brand font-semibold hover:underline" %>
+        para agregar más.
+      </p>
+    </div>
+  </div>
+<% end %>
+
+<%# ── Services grid ─────────────────────────────── %>
+<% if @services.any? %>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <% @services.each do |service| %>
+      <div class="group rounded-2xl border bg-white overflow-hidden transition-all <%= service.active? ? 'border-cream-dark hover:border-brand/30 hover:shadow-sm' : 'border-cream-dark opacity-60' %>">
+
+        <%# Card body %>
+        <div class="px-5 py-5">
+          <div class="flex items-start justify-between gap-2 mb-3">
+            <h3 class="font-fraunces text-lg font-light text-forest leading-tight"><%= service.name %></h3>
+            <% unless service.active? %>
+              <span class="inline-flex shrink-0 rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-semibold text-stone-500 uppercase tracking-wider">
+                Inactivo
+              </span>
+            <% end %>
+          </div>
+
+          <%# Price + duration %>
+          <div class="flex items-baseline gap-3 mb-4">
+            <span class="text-2xl font-bold text-forest">
+              $<%= number_with_delimiter(service.price_cents / 100) %>
+            </span>
+            <span class="text-sm text-forest/40">MXN · <%= service.duration_label %></span>
+          </div>
+
+          <%# Deposit badge %>
+          <% if service.deposit_required? %>
+            <div class="inline-flex items-center gap-1.5 rounded-full bg-brand-muted px-3 py-1 text-xs font-semibold text-brand mb-4">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75" />
+              </svg>
+                Depósito $<%= number_with_delimiter(service.deposit_amount_cents / 100) %>
+            </div>
+          <% end %>
+        </div>
+
+        <%# Card actions %>
+        <div class="border-t border-cream-dark px-5 py-3 flex items-center gap-3">
+          <%= link_to edit_dashboard_service_path(service),
+              class: "text-xs font-semibold text-forest/50 hover:text-forest transition-colors" do %>
+            Editar
+          <% end %>
+
+          <span class="text-forest/20">·</span>
+
+          <%= button_to toggle_active_dashboard_service_path(service), method: :patch,
+              class: "text-xs font-semibold transition-colors #{service.active? ? 'text-forest/50 hover:text-brand' : 'text-brand hover:text-brand-light'}" do %>
+            <%= service.active? ? "Desactivar" : "Activar" %>
+          <% end %>
+
+          <div class="flex-1"></div>
+
+          <%= button_to dashboard_service_path(service), method: :delete,
+              data: { turbo_confirm: "¿Eliminar el servicio \"#{service.name}\"?" },
+              class: "text-xs text-red-400 hover:text-red-600 transition-colors" do %>
+            Eliminar
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+<% else %>
+  <div class="flex flex-col items-center justify-center py-20 text-center">
+    <div class="w-14 h-14 rounded-2xl bg-cream-dark flex items-center justify-center mb-4">
+      <svg class="w-7 h-7 text-forest/30" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+      </svg>
+    </div>
+    <p class="font-fraunces text-lg text-forest/60">Sin servicios</p>
+    <p class="text-sm text-forest/40 mt-1 mb-5">Define los servicios que ofreces para que los clientes puedan reservar.</p>
+    <%= link_to "Crear primer servicio", new_dashboard_service_path,
+        class: "inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-light transition-colors" %>
+  </div>
+<% end %>

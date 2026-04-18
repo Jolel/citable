@@ -1,0 +1,84 @@
+<% content_for :title, "Clientes — #{current_account.name}" %>
+
+<%# ── Page header ──────────────────────────────── %>
+<div class="flex items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="font-fraunces text-2xl font-light text-forest">Clientes</h1>
+    <p class="text-sm text-forest/50 mt-0.5"><%= pluralize(@customers.size, "cliente") %> registrado<%= @customers.size == 1 ? "" : "s" %></p>
+  </div>
+  <%= link_to new_dashboard_customer_path,
+      class: "inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-light transition-colors shrink-0" do %>
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+    Nuevo cliente
+  <% end %>
+</div>
+
+<%# ── Search + tag filters ─────────────────────── %>
+<div class="mb-5 space-y-3">
+  <%= form_with url: dashboard_customers_path, method: :get, local: true, class: "relative" do |f| %>
+    <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-forest/30" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+    </svg>
+    <%= f.text_field :q, value: params[:q],
+        placeholder: "Buscar por nombre o teléfono…",
+        class: "block w-full rounded-xl border border-cream-dark bg-white pl-10 pr-4 py-2.5 text-sm text-forest placeholder:text-forest/30 focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+  <% end %>
+</div>
+
+<%# ── Customer list ─────────────────────────────── %>
+<% if @customers.any? %>
+  <div class="rounded-2xl border border-cream-dark bg-white overflow-hidden">
+    <% @customers.each_with_index do |customer, i| %>
+      <%= link_to dashboard_customer_path(customer),
+          class: "group flex items-center gap-4 px-5 py-4 hover:bg-cream transition-colors #{i > 0 ? 'border-t border-cream-dark' : ''}" do %>
+
+        <%# Avatar %>
+        <div class="w-9 h-9 rounded-full bg-brand-muted flex items-center justify-center shrink-0">
+          <span class="text-sm font-bold text-brand"><%= customer.name.to_s.first.upcase %></span>
+        </div>
+
+        <%# Info %>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-forest truncate"><%= customer.name %></p>
+          <p class="text-xs text-forest/50 mt-0.5"><%= customer.phone %></p>
+        </div>
+
+        <%# Tags %>
+        <% if customer.tags.present? %>
+          <div class="hidden sm:flex items-center gap-1.5 shrink-0">
+            <% customer.tags.first(2).each do |tag| %>
+              <span class="inline-flex rounded-full bg-cream-dark px-2.5 py-0.5 text-[10px] font-semibold text-forest/60 uppercase tracking-wider">
+                <%= tag %>
+              </span>
+            <% end %>
+          </div>
+        <% end %>
+
+        <%# Arrow %>
+        <svg class="w-4 h-4 text-forest/20 group-hover:text-brand/40 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+        </svg>
+      <% end %>
+    <% end %>
+  </div>
+<% else %>
+  <div class="flex flex-col items-center justify-center py-20 text-center">
+    <div class="w-14 h-14 rounded-2xl bg-cream-dark flex items-center justify-center mb-4">
+      <svg class="w-7 h-7 text-forest/30" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+      </svg>
+    </div>
+    <% if params[:q].present? %>
+      <p class="font-fraunces text-lg text-forest/60">Sin resultados</p>
+      <p class="text-sm text-forest/40 mt-1 mb-5">No encontramos clientes con "<%= params[:q] %>"</p>
+      <%= link_to "Ver todos", dashboard_customers_path, class: "text-sm text-brand hover:text-brand-light" %>
+    <% else %>
+      <p class="font-fraunces text-lg text-forest/60">Sin clientes</p>
+      <p class="text-sm text-forest/40 mt-1 mb-5">Los clientes se agregan aquí o al recibir una reserva.</p>
+      <%= link_to "Agregar cliente", new_dashboard_customer_path,
+          class: "inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-light transition-colors" %>
+    <% end %>
+  </div>
+<% end %>

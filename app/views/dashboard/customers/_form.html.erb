@@ -1,0 +1,64 @@
+<%# Shared form for new/edit customer %>
+
+<%= form_with model: [:dashboard, customer], class: "space-y-5" do |f| %>
+
+  <%# Errors %>
+  <% if customer.errors.any? %>
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+      <p class="text-sm font-semibold text-red-800 mb-2">
+        Por favor corrige los siguientes errores:
+      </p>
+      <ul class="list-disc list-inside space-y-1">
+        <% customer.errors.full_messages.each do |msg| %>
+          <li class="text-sm text-red-700"><%= msg %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <%# Name %>
+  <div>
+    <%= f.label :name, "Nombre completo", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.text_field :name,
+        placeholder: "Ej. Rosa Martínez",
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+  </div>
+
+  <%# Phone %>
+  <div>
+    <%= f.label :phone, "Teléfono / WhatsApp", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.telephone_field :phone,
+        placeholder: "+52 55 1234 5678",
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+    <p class="text-xs text-forest/40 mt-1">Se usa para enviar recordatorios por WhatsApp</p>
+  </div>
+
+  <%# Tags %>
+  <div>
+    <%= f.label :tags, "Etiquetas (separadas por coma)", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <input type="text"
+           name="customer[tags][]"
+           value="<%= customer.tags.join(", ") %>"
+           placeholder="Ej. VIP, mensual, referido"
+           class="block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none">
+    <p class="text-xs text-forest/40 mt-1">Sirven para filtrar clientes rápidamente</p>
+  </div>
+
+  <%# Notes %>
+  <div>
+    <%= f.label :notes, "Notas internas", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.text_area :notes,
+        rows: 3,
+        placeholder: "Preferencias, alergias, referencias…",
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none resize-none" %>
+  </div>
+
+  <%# Submit %>
+  <div class="flex items-center gap-3 pt-2">
+    <%= f.submit customer.persisted? ? "Guardar cambios" : "Crear cliente",
+        class: "inline-flex items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-light transition-colors cursor-pointer" %>
+    <%= link_to "Cancelar",
+        customer.persisted? ? dashboard_customer_path(customer) : dashboard_customers_path,
+        class: "text-sm text-forest/50 hover:text-forest transition-colors" %>
+  </div>
+<% end %>

@@ -40,6 +40,11 @@ Rails.application.configure do
   # Set localhost to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "localhost", port: 3000 }
 
+  # Default tld_length is 1, so two-label dev hosts like `ana.localhost` produce *no*
+  # subdomain and tenant resolution fails. Use 0 in development so the first label
+  # is the tenant subdomain (production keeps tld_length 1 for `ana.example.mx`).
+  config.action_dispatch.tld_length = 0
+
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
 

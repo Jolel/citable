@@ -1,1 +1,43 @@
 @import "tailwindcss";
+
+@theme {
+  /* Brand palette */
+  --color-brand:        #C4522A;
+  --color-brand-light:  #E8836A;
+  --color-brand-muted:  #FDF3EF;
+  --color-forest:       #1B3532;
+  --color-forest-deep:  #132624;
+  --color-forest-mid:   #274945;
+  --color-forest-soft:  #3A6460;
+  --color-cream:        #FAF7F2;
+  --color-cream-dark:   #F0EAE0;
+  --color-amber:        #E8A838;
+  --color-amber-muted:  #FDF6E3;
+  --color-wa:           #25D366;
+  --color-wa-dark:      #128C7E;
+
+  /* Typography */
+  --font-jakarta:   "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-fraunces:  "Fraunces", ui-serif, Georgia, serif;
+}
+
+/* Base styles */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar for sidebar */
+.sidebar-scroll::-webkit-scrollbar { width: 4px; }
+.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+/* Booking status badges */
+.badge-pending   { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-muted text-amber-600 border border-amber-200; }
+.badge-confirmed { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200; }
+.badge-completed { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-stone-100 text-stone-500 border border-stone-200; }
+.badge-cancelled { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-brand-muted text-brand border border-red-200; }
+.badge-no-show   { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-orange-50 text-orange-600 border border-orange-200; }
+
+/* Smooth transitions */
+.sidebar-panel { transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1); }

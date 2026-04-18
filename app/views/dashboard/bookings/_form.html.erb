@@ -1,0 +1,72 @@
+<%# Shared form for new/edit booking %>
+
+<%= form_with model: [:dashboard, booking], class: "space-y-5" do |f| %>
+
+  <%# Errors %>
+  <% if booking.errors.any? %>
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+      <p class="text-sm font-semibold text-red-800 mb-2">
+        <%= pluralize(booking.errors.count, "error impidió guardar esta cita", "errores impidieron guardar esta cita") %>:
+      </p>
+      <ul class="list-disc list-inside space-y-1">
+        <% booking.errors.full_messages.each do |msg| %>
+          <li class="text-sm text-red-700"><%= msg %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <%# Service %>
+  <div>
+    <%= f.label :service_id, "Servicio", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.collection_select :service_id, @services, :id, :name,
+        { prompt: "Selecciona un servicio" },
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+  </div>
+
+  <%# Staff %>
+  <div>
+    <%= f.label :user_id, "Colaborador", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.collection_select :user_id, @staff, :id, :name,
+        { prompt: "Selecciona un colaborador" },
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+  </div>
+
+  <%# Customer %>
+  <div>
+    <%= f.label :customer_id, "Cliente", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.collection_select :customer_id, @customers, :id, :name,
+        { prompt: "Selecciona un cliente" },
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+    <p class="text-xs text-forest/40 mt-1">
+      ¿Cliente nuevo?
+      <%= link_to "Créalo aquí primero", new_dashboard_customer_path, class: "text-brand hover:text-brand-light" %>
+    </p>
+  </div>
+
+  <%# Date + time %>
+  <div>
+    <%= f.label :starts_at, "Fecha y hora", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.datetime_local_field :starts_at,
+        value: booking.starts_at&.strftime("%Y-%m-%dT%H:%M") || Time.current.beginning_of_hour.advance(hours: 1).strftime("%Y-%m-%dT%H:%M"),
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+  </div>
+
+  <%# Address (optional) %>
+  <div>
+    <%= f.label :address, "Dirección (opcional)", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.text_field :address,
+        placeholder: "Ej. Av. Insurgentes 123, Col. Roma",
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest shadow-xs placeholder:text-forest/30 focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+    <p class="text-xs text-forest/40 mt-1">Solo si el servicio es a domicilio</p>
+  </div>
+
+  <%# Submit %>
+  <div class="flex items-center gap-3 pt-2">
+    <%= f.submit booking.persisted? ? "Guardar cambios" : "Crear cita",
+        class: "inline-flex items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-light transition-colors cursor-pointer" %>
+    <%= link_to "Cancelar",
+        booking.persisted? ? dashboard_booking_path(booking) : dashboard_bookings_path,
+        class: "text-sm text-forest/50 hover:text-forest transition-colors" %>
+  </div>
+<% end %>

@@ -1,0 +1,64 @@
+<% content_for :title, "Editar perfil" %>
+
+<div class="max-w-xl">
+  <div class="mb-6">
+    <h1 class="font-fraunces text-2xl font-light text-forest">Mi perfil</h1>
+    <p class="text-sm text-forest/50 mt-0.5">Actualiza tu información de acceso</p>
+  </div>
+
+  <div class="rounded-2xl border border-cream-dark bg-white p-6 mb-4">
+    <%= render "devise/shared/error_messages", resource: resource %>
+
+    <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
+
+      <div>
+        <%= f.label :name, "Nombre", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+        <%= f.text_field :name, autocomplete: "name",
+            class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+      </div>
+
+      <div>
+        <%= f.label :email, "Correo electrónico", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+        <%= f.email_field :email, autocomplete: "email",
+            class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+      </div>
+
+      <div class="pt-2 border-t border-cream-dark">
+        <p class="text-xs text-forest/40 mb-4">Deja en blanco si no deseas cambiar la contraseña</p>
+
+        <div class="space-y-4">
+          <div>
+            <%= f.label :password, "Nueva contraseña", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+            <%= f.password_field :password, autocomplete: "new-password",
+                class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+          </div>
+          <div>
+            <%= f.label :password_confirmation, "Confirmar nueva contraseña", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+            <%= f.password_field :password_confirmation, autocomplete: "new-password",
+                class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+          </div>
+          <div>
+            <%= f.label :current_password, "Contraseña actual", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+            <%= f.password_field :current_password, autocomplete: "current-password",
+                class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+            <p class="text-xs text-forest/40 mt-1">Requerida para guardar cualquier cambio</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <%= f.submit "Guardar cambios", class: "inline-flex items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-light transition-colors cursor-pointer" %>
+      </div>
+    <% end %>
+  </div>
+
+  <%# Danger zone %>
+  <div class="rounded-2xl border border-red-200 bg-red-50/50 p-5">
+    <p class="text-sm font-semibold text-red-700 mb-1">Zona peligrosa</p>
+    <p class="text-xs text-red-600/70 mb-4">Esta acción es permanente y no se puede deshacer.</p>
+    <%= button_to "Eliminar mi cuenta", registration_path(resource_name),
+        data: { method: :delete, turbo_confirm: "¿Estás seguro? Esta acción eliminará tu cuenta permanentemente." },
+        method: :delete,
+        class: "inline-flex items-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors" %>
+  </div>
+</div>

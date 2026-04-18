@@ -1,0 +1,65 @@
+<div class="min-h-screen bg-forest flex flex-col items-center justify-center px-4 py-12">
+
+  <%# Logo %>
+  <div class="mb-10 text-center">
+    <span class="font-fraunces text-4xl font-light italic text-cream tracking-tight">Citable</span>
+    <p class="text-sm text-cream/40 mt-2">Crea tu cuenta gratis · Sin tarjeta requerida</p>
+  </div>
+
+  <div class="w-full max-w-sm">
+    <div class="rounded-3xl bg-cream px-8 py-8 shadow-2xl">
+
+      <h1 class="font-fraunces text-xl font-light text-forest mb-1">Crea tu cuenta</h1>
+      <p class="text-xs text-forest/50 mb-6">Empieza a recibir citas en minutos</p>
+
+      <%# Errors %>
+      <%= render "devise/shared/error_messages", resource: resource %>
+
+      <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "space-y-4" }) do |f| %>
+
+        <div>
+          <%= f.label :name, "Tu nombre", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+          <%= f.text_field :name, autofocus: true, autocomplete: "name",
+              class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none",
+              placeholder: "Ana García" %>
+        </div>
+
+        <div>
+          <%= f.label :email, "Correo electrónico", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+          <%= f.email_field :email, autocomplete: "email",
+              class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none",
+              placeholder: "ana@example.com" %>
+        </div>
+
+        <div>
+          <%= f.label :password, "Contraseña", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+          <%= f.password_field :password, autocomplete: "new-password",
+              class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+          <p class="text-xs text-forest/40 mt-1">Mínimo <%= @minimum_password_length %> caracteres</p>
+        </div>
+
+        <div>
+          <%= f.label :password_confirmation, "Confirma tu contraseña", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+          <%= f.password_field :password_confirmation, autocomplete: "new-password",
+              class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+        </div>
+
+        <div class="pt-2">
+          <%= f.submit "Crear cuenta", class: "w-full rounded-xl bg-brand py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-light transition-colors cursor-pointer" %>
+        </div>
+      <% end %>
+
+      <div class="mt-5 text-center">
+        <p class="text-xs text-forest/40">
+          ¿Ya tienes cuenta?
+          <%= link_to "Inicia sesión", new_session_path(resource_name),
+              class: "text-brand hover:text-brand-light transition-colors font-semibold" %>
+        </p>
+      </div>
+    </div>
+
+    <p class="mt-6 text-xs text-cream/20 text-center">
+      Al registrarte aceptas nuestros términos de servicio y política de privacidad.
+    </p>
+  </div>
+</div>

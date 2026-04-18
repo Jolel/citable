@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Foundation complete. Next phase is building the UI (views, layouts, components).
+UI phase complete. Next phase is integrations (Twilio WhatsApp, Stripe deposits) and production readiness.
 
 ## What Was Just Built (Foundation)
 
@@ -60,19 +60,21 @@ Creates: Account "Estudio de Ana" (subdomain: ana), owner user ana@example.com, 
 
 ## Next Steps
 
-### Immediate (to get a running app)
-1. Run in terminal: `rails db:create db:migrate db:seed`
-2. Add Devise views: `rails generate devise:views`
-3. Create layouts: `app/views/layouts/dashboard.html.erb` + `public.html.erb`
-4. Create dashboard home view (booking calendar/list)
-5. Create public booking page view
+### Immediate (to boot and test)
+1. Run in terminal: `rails db:create db:migrate db:seed` (if not done)
+2. `bin/dev` — Rails + TailwindCSS watcher
+3. Visit `http://ana.localhost:3000/dashboard/auth/entrar`
 
-### Near-term UI priorities
-- Dashboard layout with sidebar navigation
-- Booking index (today + upcoming calendar view)
-- Customer list with search
-- Service list + edit form
-- Public booking page (mobile-first, Spanish, service picker + time slots)
+### Near-term (integrations)
+- Add Twilio WhatsApp credentials + test message templates
+- Add Stripe Mexico credentials + test deposit flow
+- Add Resend email credentials
+- Google OAuth2 for Calendar sync
+
+### Design system notes
+- **Palette**: forest `#1B3532` (sidebar), brand `#C4522A` (CTA/terracotta), cream `#FAF7F2` (bg), amber `#E8A838` (pending)
+- **Fonts**: Fraunces italic (display/brand), Plus Jakarta Sans (UI) — loaded via Google Fonts
+- **Custom Tailwind classes**: `bg-brand`, `text-forest`, `bg-cream`, `font-fraunces`, `font-jakarta`, etc. (defined in `@theme`)
 
 ### Before Production
 - Add Stripe credentials: `rails credentials:edit`

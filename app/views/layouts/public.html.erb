@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+  <head>
+    <title><%= content_for(:title) || "#{current_tenant&.name || 'Citable'} — Reserva tu cita" %></title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#1B3532">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= yield :head %>
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,300;1,9..144,500;1,9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body class="bg-cream font-jakarta text-forest antialiased min-h-screen">
+
+    <%# Header %>
+    <header class="bg-forest px-4 py-4 sm:px-6">
+      <div class="max-w-lg mx-auto flex items-center justify-between">
+        <div>
+          <% if current_tenant %>
+            <p class="font-fraunces text-xl font-light italic text-cream leading-tight">
+              <%= current_tenant.name %>
+            </p>
+          <% end %>
+        </div>
+        <span class="font-fraunces text-sm italic text-cream/40">Citable</span>
+      </div>
+    </header>
+
+    <%# Flash %>
+    <% if notice.present? %>
+      <div class="max-w-lg mx-auto px-4 pt-4">
+        <div class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <svg class="w-4 h-4 shrink-0 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"/>
+          </svg>
+          <%= notice %>
+        </div>
+      </div>
+    <% end %>
+    <% if alert.present? %>
+      <div class="max-w-lg mx-auto px-4 pt-4">
+        <div class="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <svg class="w-4 h-4 shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/>
+          </svg>
+          <%= alert %>
+        </div>
+      </div>
+    <% end %>
+
+    <%# Main content %>
+    <main class="max-w-lg mx-auto px-4 py-6 sm:px-6">
+      <%= yield %>
+    </main>
+
+    <%# Footer %>
+    <footer class="max-w-lg mx-auto px-4 pb-8 sm:px-6">
+      <p class="text-xs text-center text-forest/30 leading-relaxed">
+        Tus datos están protegidos conforme a la Ley Federal de Protección de Datos Personales (LFPDPPP).
+        <br>
+        Al reservar aceptas que el negocio te contacte por WhatsApp para recordatorios de tu cita.
+      </p>
+    </footer>
+
+  </body>
+</html>

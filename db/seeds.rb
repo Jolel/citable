@@ -93,4 +93,4 @@ ActsAsTenant.without_tenant do
   end
 end
 
-puts "Done! Visit http://ana.citable.localhost:3000 or use subdomain 'ana'"
+puts "Done! Visit http://ana.localhost:3000 and sign in as ana@example.com / password123"

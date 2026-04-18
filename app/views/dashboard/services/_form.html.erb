@@ -1,0 +1,101 @@
+<%# Shared form for new/edit service %>
+
+<%= form_with model: [:dashboard, service], class: "space-y-5" do |f| %>
+
+  <% if service.errors.any? %>
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+      <p class="text-sm font-semibold text-red-800 mb-2">Por favor corrige los siguientes errores:</p>
+      <ul class="list-disc list-inside space-y-1">
+        <% service.errors.full_messages.each do |msg| %>
+          <li class="text-sm text-red-700"><%= msg %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <%# Name %>
+  <div>
+    <%= f.label :name, "Nombre del servicio", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <%= f.text_field :name,
+        placeholder: "Ej. Corte de cabello",
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+  </div>
+
+  <%# Duration %>
+  <div>
+    <%= f.label :duration_minutes, "Duración (minutos)", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <div class="relative">
+      <%= f.number_field :duration_minutes, min: 5, step: 5,
+          placeholder: "60",
+          class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none pr-16" %>
+      <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-forest/40 pointer-events-none">min</span>
+    </div>
+    <p class="text-xs text-forest/40 mt-1">Ej. 30 = 30 min · 90 = 1h 30min</p>
+  </div>
+
+  <%# Price %>
+  <div>
+    <%= f.label :price_cents, "Precio (centavos MXN)", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+    <div class="relative">
+      <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-forest/40 pointer-events-none">$</span>
+      <input type="number" name="service[price_cents]"
+             value="<%= service.price_cents %>"
+             min="0" step="100"
+             placeholder="25000"
+             class="block w-full rounded-xl border border-cream-dark bg-white pl-8 pr-16 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none">
+      <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-forest/40 pointer-events-none">¢</span>
+    </div>
+    <p class="text-xs text-forest/40 mt-1">
+      Ingresa en centavos — Ej. $250.00 = <strong>25000</strong>
+    </p>
+  </div>
+
+  <%# Deposit %>
+  <div>
+    <div class="flex items-center justify-between mb-1.5">
+      <label class="text-xs font-semibold uppercase tracking-wider text-forest/50">
+        Depósito anticipado (centavos MXN)
+      </label>
+      <span class="text-xs text-forest/40">Opcional</span>
+    </div>
+    <div class="relative">
+      <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-forest/40 pointer-events-none">$</span>
+      <input type="number" name="service[deposit_amount_cents]"
+             value="<%= service.deposit_amount_cents %>"
+             min="0" step="100"
+             placeholder="0"
+             class="block w-full rounded-xl border border-cream-dark bg-white pl-8 pr-16 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none">
+      <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-forest/40 pointer-events-none">¢</span>
+    </div>
+    <p class="text-xs text-forest/40 mt-1">Pon 0 si no requieres depósito. Se cobra vía Stripe.</p>
+  </div>
+
+  <%# Requires address %>
+  <div class="flex items-center gap-3 rounded-xl border border-cream-dark bg-cream p-4">
+    <%= f.check_box :requires_address,
+        class: "w-4 h-4 rounded border-cream-dark text-brand focus:ring-brand shrink-0" %>
+    <div>
+      <%= f.label :requires_address, "Servicio a domicilio", class: "text-sm font-semibold text-forest" %>
+      <p class="text-xs text-forest/50 mt-0.5">El cliente deberá ingresar su dirección al reservar</p>
+    </div>
+  </div>
+
+  <%# Active toggle (only for edit) %>
+  <% if service.persisted? %>
+    <div class="flex items-center gap-3 rounded-xl border border-cream-dark bg-cream p-4">
+      <%= f.check_box :active,
+          class: "w-4 h-4 rounded border-cream-dark text-brand focus:ring-brand shrink-0" %>
+      <div>
+        <%= f.label :active, "Servicio activo", class: "text-sm font-semibold text-forest" %>
+        <p class="text-xs text-forest/50 mt-0.5">Los clientes solo pueden reservar servicios activos</p>
+      </div>
+    </div>
+  <% end %>
+
+  <%# Submit %>
+  <div class="flex items-center gap-3 pt-2">
+    <%= f.submit service.persisted? ? "Guardar cambios" : "Crear servicio",
+        class: "inline-flex items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-light transition-colors cursor-pointer" %>
+    <%= link_to "Cancelar", dashboard_services_path, class: "text-sm text-forest/50 hover:text-forest transition-colors" %>
+  </div>
+<% end %>

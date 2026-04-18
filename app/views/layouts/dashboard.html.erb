@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+  <head>
+    <title><%= content_for(:title) || "Citable — Panel" %></title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= yield :head %>
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,300;1,9..144,500;1,9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body class="bg-cream font-jakarta text-forest antialiased">
+    <div class="flex h-screen overflow-hidden" data-controller="sidebar">
+
+      <%# ── Mobile overlay ─────────────────────────── %>
+      <div data-sidebar-target="overlay"
+           data-action="click->sidebar#close"
+           class="hidden fixed inset-0 z-20 bg-black/50 backdrop-blur-sm lg:hidden"></div>
+
+      <%# ── Sidebar ─────────────────────────────────── %>
+      <aside data-sidebar-target="panel"
+             class="sidebar-panel fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-forest -translate-x-full lg:static lg:translate-x-0">
+
+        <%# Logo ─────────────────────────────────────── %>
+        <div class="flex items-center px-6 py-5 border-b border-white/10">
+          <%= link_to dashboard_root_path, class: "flex items-center gap-2" do %>
+            <span class="font-fraunces text-2xl font-light italic text-cream tracking-tight">Citable</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-brand mt-1 flex-shrink-0"></span>
+          <% end %>
+        </div>
+
+        <%# Business name ────────────────────────────── %>
+        <div class="px-6 py-4 border-b border-white/10">
+          <p class="text-[10px] font-semibold tracking-widest text-cream/40 uppercase mb-1">Negocio</p>
+          <p class="text-sm font-semibold text-cream truncate"><%= current_account.name %></p>
+        </div>
+
+        <%# Navigation ───────────────────────────────── %>
+        <nav class="sidebar-scroll flex-1 overflow-y-auto px-3 py-5 space-y-0.5">
+          <%= dashboard_nav_link("Citas", dashboard_bookings_path, "bookings") %>
+          <%= dashboard_nav_link("Clientes", dashboard_customers_path, "customers") %>
+          <%= dashboard_nav_link("Servicios", dashboard_services_path, "services") %>
+          <%= dashboard_nav_link("Personal", dashboard_staff_index_path, "staff") %>
+        </nav>
+
+        <%# Bottom actions ───────────────────────────── %>
+        <div class="px-3 pb-3 border-t border-white/10 pt-3 space-y-0.5">
+          <%= dashboard_nav_link("Configuración", dashboard_settings_path, "settings") %>
+          <%= link_to destroy_user_session_path,
+                data: { turbo_method: :delete },
+                class: "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-cream/50 hover:text-cream/80 transition-colors" do %>
+            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />
+            </svg>
+            Cerrar sesión
+          <% end %>
+        </div>
+
+        <%# User info ────────────────────────────────── %>
+        <div class="px-6 py-4 border-t border-white/10">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-brand/20 flex items-center justify-center shrink-0">
+              <span class="text-xs font-bold text-brand-light"><%= current_user.name.to_s.first.upcase %></span>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-cream truncate"><%= current_user.name %></p>
+              <p class="text-[10px] text-cream/40 truncate"><%= current_user.email %></p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <%# ── Main area ──────────────────────────────── %>
+      <div class="flex flex-1 flex-col min-w-0 overflow-hidden">
+
+        <%# Mobile topbar %>
+        <header class="flex items-center justify-between bg-forest px-4 py-3 lg:hidden shrink-0">
+          <button data-action="click->sidebar#open"
+                  class="rounded-lg p-1.5 text-cream/70 hover:text-cream hover:bg-white/10 transition-colors">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+          <span class="font-fraunces text-xl font-light italic text-cream">Citable</span>
+          <div class="w-8"></div>
+        </header>
+
+        <%# Flash messages %>
+        <% if notice.present? %>
+          <div class="mx-4 mt-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" data-controller="flash">
+            <svg class="w-4 h-4 shrink-0 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"/>
+            </svg>
+            <%= notice %>
+          </div>
+        <% end %>
+        <% if alert.present? %>
+          <div class="mx-4 mt-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <svg class="w-4 h-4 shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/>
+            </svg>
+            <%= alert %>
+          </div>
+        <% end %>
+
+        <%# Page content %>
+        <main class="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">
+          <%= yield %>
+        </main>
+      </div>
+
+    </div>
+  </body>
+</html>

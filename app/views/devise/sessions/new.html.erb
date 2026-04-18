@@ -1,0 +1,72 @@
+<div class="min-h-screen bg-forest flex flex-col items-center justify-center px-4 py-12">
+
+  <%# Logo %>
+  <div class="mb-10 text-center">
+    <span class="font-fraunces text-4xl font-light italic text-cream tracking-tight">Citable</span>
+    <p class="text-sm text-cream/40 mt-2">Agenda de citas para tu negocio</p>
+  </div>
+
+  <%# Card %>
+  <div class="w-full max-w-sm">
+    <div class="rounded-3xl bg-cream px-8 py-8 shadow-2xl">
+
+      <h1 class="font-fraunces text-xl font-light text-forest mb-6">Inicia sesión</h1>
+
+      <%# Errors %>
+      <% if flash[:alert].present? %>
+        <div class="mb-5 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <svg class="w-4 h-4 shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/>
+          </svg>
+          <%= flash[:alert] %>
+        </div>
+      <% end %>
+
+      <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "space-y-4" }) do |f| %>
+
+        <div>
+          <%= f.label :email, "Correo electrónico", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+          <%= f.email_field :email, autofocus: true, autocomplete: "email",
+              class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none",
+              placeholder: "ana@example.com" %>
+        </div>
+
+        <div>
+          <%= f.label :password, "Contraseña", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>
+          <%= f.password_field :password, autocomplete: "current-password",
+              class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+        </div>
+
+        <% if devise_mapping.rememberable? %>
+          <div class="flex items-center gap-2">
+            <%= f.check_box :remember_me, class: "w-4 h-4 rounded border-cream-dark text-brand focus:ring-brand" %>
+            <%= f.label :remember_me, "Mantener sesión iniciada", class: "text-sm text-forest/60" %>
+          </div>
+        <% end %>
+
+        <div class="pt-2">
+          <%= f.submit "Entrar", class: "w-full rounded-xl bg-brand py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-light transition-colors cursor-pointer" %>
+        </div>
+      <% end %>
+
+      <%# Links %>
+      <div class="mt-5 space-y-2 text-center">
+        <% if devise_mapping.recoverable? && controller_name != "passwords" && controller_name != "registrations" %>
+          <p>
+            <%= link_to "¿Olvidaste tu contraseña?", new_password_path(resource_name),
+                class: "text-xs text-brand hover:text-brand-light transition-colors" %>
+          </p>
+        <% end %>
+        <% if devise_mapping.registerable? && controller_name != "registrations" %>
+          <p class="text-xs text-forest/40">
+            ¿Aún no tienes cuenta?
+            <%= link_to "Regístrate gratis", new_registration_path(resource_name),
+                class: "text-brand hover:text-brand-light transition-colors font-semibold" %>
+          </p>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+  <p class="mt-8 text-xs text-cream/20 text-center">© <%= Date.current.year %> Citable</p>
+</div>
