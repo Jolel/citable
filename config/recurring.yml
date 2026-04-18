@@ -1,0 +1,8 @@
+# Solid Queue recurring tasks
+# Uncomment and configure when needed
+#
+# GC stale reminder schedules (example):
+# cleanup_sent_reminders:
+#   class: CleanupSentRemindersJob
+#   schedule: every day at midnight
+#   queue: default
