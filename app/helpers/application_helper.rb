@@ -14,13 +14,13 @@ module ApplicationHelper
 
   def booking_status_badge(status)
     labels = {
-      "pending"   => ["Por confirmar", "badge-pending"],
-      "confirmed" => ["Confirmada",    "badge-confirmed"],
-      "completed" => ["Completada",    "badge-completed"],
-      "cancelled" => ["Cancelada",     "badge-cancelled"],
-      "no_show"   => ["No se presentó","badge-no-show"]
+      "pending"   => [ "Por confirmar", "badge-pending" ],
+      "confirmed" => [ "Confirmada",    "badge-confirmed" ],
+      "completed" => [ "Completada",    "badge-completed" ],
+      "cancelled" => [ "Cancelada",     "badge-cancelled" ],
+      "no_show"   => [ "No se presentó", "badge-no-show" ]
     }
-    text, css = labels[status.to_s] || [status.to_s.humanize, "badge-pending"]
+    text, css = labels[status.to_s] || [ status.to_s.humanize, "badge-pending" ]
     content_tag(:span, text, class: css)
   end
 

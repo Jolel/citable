@@ -5,11 +5,11 @@ class Dashboard::BookingsController < Dashboard::BaseController
     @bookings = Booking.includes(:customer, :service, :user)
                        .order(:starts_at)
     @bookings = case params[:filter]
-                when "upcoming" then @bookings.upcoming
-                when "today"    then @bookings.today
-                when "past"     then @bookings.past
-                else                 @bookings.upcoming
-                end
+    when "upcoming" then @bookings.upcoming
+    when "today"    then @bookings.today
+    when "past"     then @bookings.past
+    else                 @bookings.upcoming
+    end
   end
 
   def show
