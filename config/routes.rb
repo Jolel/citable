@@ -4,8 +4,7 @@ Rails.application.routes.draw do
 
   # Devise auth (scoped to dashboard)
   devise_for :users, path: "dashboard/auth",
-             path_names: { sign_in: "entrar", sign_out: "salir", sign_up: "registrarse" },
-             controllers: { omniauth_callbacks: "users/omniauth_callbacks" }
+             path_names: { sign_in: "entrar", sign_out: "salir", sign_up: "registrarse" }
 
   # Owner / staff dashboard
   namespace :dashboard do
@@ -30,6 +29,11 @@ Rails.application.routes.draw do
     resource :settings, only: %i[show update]
     resource :google_calendar, only: [] do
       delete :disconnect, on: :member
+    end
+
+    resource :google_oauth, only: [], path: "google_oauth" do
+      get :authorize, on: :collection
+      get :callback,  on: :collection
     end
   end
 

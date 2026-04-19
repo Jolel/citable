@@ -61,8 +61,7 @@ gem "resend"
 gem "money-rails"
 
 # Google Calendar OAuth2 + API
-gem "omniauth-google-oauth2"
-gem "omniauth-rails_csrf_protection"
+gem "googleauth"
 gem "google-apis-calendar_v3"
 
 group :development, :test do
