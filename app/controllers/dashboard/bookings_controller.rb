@@ -26,6 +26,7 @@ class Dashboard::BookingsController < Dashboard::BaseController
     @booking = Booking.new(booking_params)
     if @booking.save
       schedule_reminders(@booking)
+      GoogleCalendarSyncJob.perform_later(@booking.id)
       redirect_to dashboard_booking_path(@booking), notice: "Cita creada exitosamente."
     else
       @services = Service.active
@@ -54,16 +55,19 @@ class Dashboard::BookingsController < Dashboard::BaseController
 
   def destroy
     @booking.cancel!
+    GoogleCalendarSyncJob.perform_later(@booking.id)
     redirect_to dashboard_bookings_path, notice: "Cita cancelada."
   end
 
   def confirm
     @booking.confirm!
+    GoogleCalendarSyncJob.perform_later(@booking.id)
     redirect_to dashboard_booking_path(@booking), notice: "Cita confirmada."
   end
 
   def cancel
     @booking.cancel!
+    GoogleCalendarSyncJob.perform_later(@booking.id)
     redirect_to dashboard_bookings_path, notice: "Cita cancelada."
   end
 

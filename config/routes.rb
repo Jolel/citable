@@ -4,7 +4,8 @@ Rails.application.routes.draw do
 
   # Devise auth (scoped to dashboard)
   devise_for :users, path: "dashboard/auth",
-             path_names: { sign_in: "entrar", sign_out: "salir", sign_up: "registrarse" }
+             path_names: { sign_in: "entrar", sign_out: "salir", sign_up: "registrarse" },
+             controllers: { omniauth_callbacks: "users/omniauth_callbacks" }
 
   # Owner / staff dashboard
   namespace :dashboard do
@@ -27,6 +28,9 @@ Rails.application.routes.draw do
     resources :staff, only: %i[index show new create edit update destroy]
 
     resource :settings, only: %i[show update]
+    resource :google_calendar, only: [] do
+      delete :disconnect, on: :member
+    end
   end
 
   # Inbound webhooks (no auth, no CSRF)
