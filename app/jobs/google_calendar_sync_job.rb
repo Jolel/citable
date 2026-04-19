@@ -1,7 +1,7 @@
 class GoogleCalendarSyncJob < ApplicationJob
   queue_as :default
 
-  def perform(booking_id)
+  def perform(booking_id, action)
     booking = Booking.find_by(id: booking_id)
     return unless booking
 
@@ -9,23 +9,7 @@ class GoogleCalendarSyncJob < ApplicationJob
       staff = booking.user
       return unless staff.google_connected?
 
-      if booking.google_event_id.present?
-        update_event(booking, staff)
-      else
-        create_event(booking, staff)
-      end
+      GoogleCalendarService.new(staff).sync_booking(booking, action.to_sym)
     end
-  end
-
-  private
-
-  def create_event(booking, staff)
-    # TODO: implement Google Calendar API call
-    # Requires google-api-ruby-client gem and OAuth2 token refresh logic
-    Rails.logger.info "[GoogleCalendarSyncJob] Would create event for booking #{booking.id}"
-  end
-
-  def update_event(booking, staff)
-    Rails.logger.info "[GoogleCalendarSyncJob] Would update event #{booking.google_event_id} for booking #{booking.id}"
   end
 end

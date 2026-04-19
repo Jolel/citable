@@ -1,0 +1,126 @@
+<% content_for :title, @staff_member.display_name %>
+
+<%# ── Back header ─────────────────────────────────── %>
+<div class="flex items-center justify-between gap-4 mb-6">
+  <%= link_to dashboard_staff_index_path,
+      class: "inline-flex items-center gap-1.5 text-sm text-forest/50 hover:text-forest transition-colors" do %>
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+    </svg>
+    Colaboradores
+  <% end %>
+
+  <div class="flex items-center gap-2">
+    <%= link_to edit_dashboard_staff_path(@staff_member),
+        class: "inline-flex items-center gap-1.5 rounded-lg border border-cream-dark px-3 py-1.5 text-sm font-medium text-forest/70 hover:border-forest/30 hover:text-forest transition-colors" do %>
+      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+      </svg>
+      Editar
+    <% end %>
+  </div>
+</div>
+
+<%# ── Profile card ────────────────────────────────── %>
+<div class="rounded-2xl border border-cream-dark bg-white overflow-hidden mb-4">
+  <div class="px-6 py-5 border-b border-cream-dark flex items-center gap-4">
+    <div class="w-12 h-12 rounded-full bg-forest/10 flex items-center justify-center text-forest font-semibold text-lg font-fraunces">
+      <%= @staff_member.name&.first&.upcase || "?" %>
+    </div>
+    <div>
+      <h1 class="text-lg font-semibold text-forest font-fraunces"><%= @staff_member.display_name %></h1>
+      <p class="text-sm text-forest/50"><%= @staff_member.email %></p>
+    </div>
+    <% if @staff_member.owner? %>
+      <span class="ml-auto inline-flex items-center rounded-full bg-amber/20 px-2.5 py-1 text-xs font-semibold text-amber-700">
+        Propietario
+      </span>
+    <% end %>
+  </div>
+
+  <dl class="divide-y divide-cream-dark">
+    <% if @staff_member.phone.present? %>
+      <div class="px-6 py-4 grid grid-cols-3 gap-4">
+        <dt class="text-xs font-semibold text-forest/40 uppercase tracking-wider col-span-1 pt-0.5">Teléfono</dt>
+        <dd class="col-span-2 text-sm text-forest"><%= @staff_member.phone %></dd>
+      </div>
+    <% end %>
+  </dl>
+</div>
+
+<%# ── Availability card ───────────────────────────── %>
+<div class="rounded-2xl border border-cream-dark bg-white overflow-hidden mb-4">
+  <div class="px-6 py-4 border-b border-cream-dark">
+    <h2 class="text-sm font-semibold text-forest">Disponibilidad</h2>
+  </div>
+  <% if @availabilities.any? %>
+    <ul class="divide-y divide-cream-dark">
+      <% @availabilities.each do |avail| %>
+        <li class="px-6 py-3 flex items-center justify-between">
+          <span class="text-sm text-forest capitalize">
+            <%= I18n.t("date.day_names")[avail.day_of_week] %>
+          </span>
+          <span class="text-sm text-forest/60">
+            <%= avail.start_time.strftime("%H:%M") %> – <%= avail.end_time.strftime("%H:%M") %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <p class="px-6 py-4 text-sm text-forest/40">Sin horario configurado.</p>
+  <% end %>
+</div>
+
+<%# ── Google Calendar card ────────────────────────── %>
+<div class="rounded-2xl border border-cream-dark bg-white overflow-hidden mb-4">
+  <div class="px-6 py-4 border-b border-cream-dark flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <%# Google Calendar icon %>
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="4" width="18" height="17" rx="2" stroke="#4285F4" stroke-width="1.5"/>
+        <path d="M3 9h18" stroke="#4285F4" stroke-width="1.5"/>
+        <path d="M8 2v3M16 2v3" stroke="#4285F4" stroke-width="1.5" stroke-linecap="round"/>
+        <rect x="8" y="13" width="3" height="3" rx="0.5" fill="#EA4335"/>
+      </svg>
+      <h2 class="text-sm font-semibold text-forest">Google Calendar</h2>
+    </div>
+    <% if @staff_member.google_connected? %>
+      <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+        </svg>
+        Conectado
+      </span>
+    <% end %>
+  </div>
+
+  <div class="px-6 py-4">
+    <% if @staff_member.google_connected? %>
+      <p class="text-sm text-forest/70 mb-4">
+        Las citas se sincronizan automáticamente con el calendario
+        <span class="font-medium text-forest">Citable</span>
+        en Google Calendar.
+      </p>
+      <%= button_to dashboard_google_oauth_disconnect_path(user_id: @staff_member.id),
+          method: :delete,
+          data: { turbo_confirm: "¿Desconectar Google Calendar? Se detendrá la sincronización automática." },
+          class: "inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 transition-colors" do %>
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5 21 3m0 0h-5.25M21 3v5.25M10.5 13.5 3 21m0 0h5.25M3 21v-5.25" />
+        </svg>
+        Desconectar
+      <% end %>
+    <% else %>
+      <p class="text-sm text-forest/50 mb-4">
+        Conecta Google Calendar para sincronizar las citas automáticamente.
+      </p>
+      <%= link_to connect_dashboard_google_oauth_path(user_id: @staff_member.id),
+          class: "inline-flex items-center gap-2 rounded-xl bg-[#4285F4] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3367d6] transition-colors" do %>
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+        </svg>
+        Conectar Google Calendar
+      <% end %>
+    <% end %>
+  </div>
+</div>

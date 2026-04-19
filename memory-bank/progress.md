@@ -47,7 +47,7 @@
 - [ ] Twilio WhatsApp templates submitted to Meta
 - [ ] Stripe Mexico account + webhooks configured
 - [ ] Resend email templates for fallback reminders
-- [ ] Google OAuth2 flow for Calendar sync
+- [x] Google OAuth2 flow for Calendar sync (code complete — needs credentials + Google Cloud Project setup)
 
 ### Production Readiness
 - [ ] RSpec test suite (especially cross-tenant isolation tests)
@@ -60,10 +60,12 @@
 ## Known Issues / TODOs in Code
 
 - `WhatsappSendJob`: message templates in `build_message` are placeholders, need to match Twilio-approved templates exactly
-- `GoogleCalendarSyncJob`: `create_event`/`update_event` are stubs — need `google-api-ruby-client` gem added
 - `Public::BookingsController#find_or_create_customer`: phone uniqueness is global, should validate format before lookup
 - `Dashboard::BookingsController#schedule_reminders`: should check if `starts_at` is in the past before enqueuing
 - Devise `email` uniqueness is global (not per-tenant) — acceptable for v1, may need per-tenant email in v2
+- Google Calendar: needs `rails db:migrate` to add `google_token_expires_at`, `google_channel_id`, `google_channel_expires_at`, `google_sync_token` columns
+- Google Calendar: needs Rails encryption keys in credentials (`active_record.encryption.*`) for `encrypts :google_oauth_token` etc.
+- Google Calendar: `RenewGoogleWatchJob` uses `default_url_options[:host]` — must be configured in production env
 
 ## Phased Roadmap Alignment
 

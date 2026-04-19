@@ -27,12 +27,19 @@ Rails.application.routes.draw do
     resources :staff, only: %i[index show new create edit update destroy]
 
     resource :settings, only: %i[show update]
+
+    resource :google_oauth, only: [] do
+      get    :connect
+      get    :callback
+      delete :disconnect
+    end
   end
 
   # Inbound webhooks (no auth, no CSRF)
   namespace :webhooks do
     post :twilio
     post :stripe
+    post :google_calendar
   end
 
   # Public booking pages (subdomain-based tenant resolution happens in ApplicationController)

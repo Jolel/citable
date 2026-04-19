@@ -23,6 +23,7 @@ gem "stripe"
 gem "twilio-ruby"
 gem "resend"
 gem "money-rails"
+gem "google-apis-calendar_v3"   # Calendar API client + Signet OAuth2
 ```
 
 ## Database Name Convention
@@ -53,6 +54,9 @@ Secrets are stored in Rails encrypted credentials. Keys needed:
 - `twilio.auth_token`
 - `twilio.whatsapp_number` (e.g. `+14155238886`)
 - `resend.api_key`
+- `google.client_id`
+- `google.client_secret`
+- `google.webhook_token` (random hex, used to verify push notifications)
 
 Edit with: `rails credentials:edit`
 
