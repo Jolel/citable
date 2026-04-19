@@ -2,7 +2,7 @@ class ReminderJob < ApplicationJob
   queue_as :reminders
 
   def perform(booking_id, kind)
-    booking = Booking.find_by(id: booking_id)
+    booking = ActsAsTenant.without_tenant { Booking.find_by(id: booking_id) }
     return unless booking
     return if booking.cancelled?
 

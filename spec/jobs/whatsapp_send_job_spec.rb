@@ -11,7 +11,11 @@ RSpec.describe WhatsappSendJob, type: :job do
   let(:messages_double) { double("messages", create: message_double) }
   let(:client_double)   { double("Twilio::REST::Client", messages: messages_double) }
 
-  before { allow(Twilio::REST::Client).to receive(:new).and_return(client_double) }
+  before do
+    ActsAsTenant.test_tenant = account
+    allow(Twilio::REST::Client).to receive(:new).and_return(client_double)
+  end
+  after { ActsAsTenant.test_tenant = nil }
 
   describe "#perform" do
     context "when booking does not exist" do

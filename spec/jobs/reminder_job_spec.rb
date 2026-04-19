@@ -12,9 +12,11 @@ RSpec.describe ReminderJob, type: :job do
   end
 
   before do
+    ActsAsTenant.test_tenant = account
     allow(WhatsappSendJob).to receive(:perform_now)
     allow(Resend::Emails).to receive(:send).and_return({ id: "resend-abc-123" })
   end
+  after { ActsAsTenant.test_tenant = nil }
 
   describe "#perform" do
     context "when booking does not exist" do

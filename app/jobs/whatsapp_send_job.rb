@@ -6,7 +6,7 @@ class WhatsappSendJob < ApplicationJob
   TWILIO_FROM        = Rails.application.credentials.dig(:twilio, :whatsapp_number)
 
   def perform(booking_id, kind)
-    booking = Booking.find_by(id: booking_id)
+    booking = ActsAsTenant.without_tenant { Booking.find_by(id: booking_id) }
     return unless booking
 
     ActsAsTenant.with_tenant(booking.account) do

@@ -11,10 +11,12 @@ RSpec.describe "POST /webhooks/twilio", type: :request do
   end
 
   before do
+    ActsAsTenant.test_tenant = account
     booking
     allow_any_instance_of(Twilio::Security::RequestValidator)
       .to receive(:validate).and_return(true)
   end
+  after { ActsAsTenant.test_tenant = nil }
 
   context "with invalid Twilio signature" do
     before do
