@@ -131,8 +131,8 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
 
   def build_auth_client
     Signet::OAuth2::Client.new(
-      client_id:            Rails.application.credentials.google&.client_id,
-      client_secret:        Rails.application.credentials.google&.client_secret,
+      client_id:            Rails.application.credentials.dig(:google, :client_id),
+      client_secret:        Rails.application.credentials.dig(:google, :client_secret),
       authorization_uri:    "https://accounts.google.com/o/oauth2/auth",
       token_credential_uri: "https://oauth2.googleapis.com/token",
       redirect_uri:         dashboard_google_oauth_callback_url

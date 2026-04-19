@@ -1,0 +1,82 @@
+<% content_for :title, "Configuración" %>
+
+<div class="max-w-2xl space-y-10">
+  <div>
+    <h1 class="font-fraunces text-2xl font-light text-forest mb-6">Configuración</h1>
+
+    <%= form_with model: @account, url: dashboard_settings_path, method: :patch, class: "space-y-5" do |f| %>
+      <% if @account.errors.any? %>
+        <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">
+          <% @account.errors.full_messages.each do |msg| %>
+            <p><%= msg %></p>
+          <% end %>
+        </div>
+      <% end %>
+
+      <div>
+        <%= f.label :name, "Nombre del negocio", class: "block text-sm font-semibold text-forest mb-1" %>
+        <%= f.text_field :name, class: "w-full rounded-xl border border-cream-dark bg-white px-4 py-2.5 text-sm text-forest placeholder-forest/40 focus:outline-none focus:ring-2 focus:ring-brand" %>
+      </div>
+
+      <div>
+        <%= f.label :subdomain, "Subdominio", class: "block text-sm font-semibold text-forest mb-1" %>
+        <div class="flex items-center gap-1">
+          <%= f.text_field :subdomain, class: "w-48 rounded-xl border border-cream-dark bg-white px-4 py-2.5 text-sm text-forest focus:outline-none focus:ring-2 focus:ring-brand" %>
+          <span class="text-sm text-forest/50">.citable.mx</span>
+        </div>
+      </div>
+
+      <div>
+        <%= f.label :timezone, "Zona horaria", class: "block text-sm font-semibold text-forest mb-1" %>
+        <%= f.select :timezone,
+              ActiveSupport::TimeZone.all.map { |tz| [tz.to_s, tz.name] },
+              { selected: @account.timezone },
+              class: "w-full rounded-xl border border-cream-dark bg-white px-4 py-2.5 text-sm text-forest focus:outline-none focus:ring-2 focus:ring-brand" %>
+      </div>
+
+      <div>
+        <%= f.submit "Guardar cambios", class: "rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 cursor-pointer" %>
+      </div>
+    <% end %>
+  </div>
+
+  <%# Google Calendar card — each logged-in user manages their own connection %>
+  <div class="rounded-2xl border border-cream-dark bg-white p-6">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="font-semibold text-forest mb-1">Google Calendar</h2>
+        <% if current_user.google_connected? %>
+          <p class="text-sm text-forest/60">
+            Conectado como <strong><%= current_user.google_calendar_id %></strong>.
+            Las citas que crees o confirmes aparecerán automáticamente en tu calendario.
+          </p>
+        <% else %>
+          <p class="text-sm text-forest/60">
+            Conecta tu cuenta de Google para sincronizar citas con tu Google Calendar automáticamente.
+          </p>
+        <% end %>
+      </div>
+
+      <% if current_user.google_connected? %>
+        <%= button_to disconnect_dashboard_google_calendar_path,
+              method: :delete,
+              data: { turbo_confirm: "¿Desconectar Google Calendar? Las citas existentes en tu calendario no se eliminarán." },
+              class: "shrink-0 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 cursor-pointer" do %>
+          Desconectar
+        <% end %>
+      <% else %>
+        <%= button_to authorize_dashboard_google_oauth_path,
+              data: { turbo: "false" },
+              class: "shrink-0 inline-flex items-center gap-2 rounded-xl bg-forest px-4 py-2.5 text-sm font-semibold text-cream hover:bg-forest/90 cursor-pointer" do %>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.198 2.698 1.24 6.65l4.026 3.115Z"/>
+            <path fill="#34A853" d="M16.04 18.013c-1.09.703-2.474 1.078-4.04 1.078a7.077 7.077 0 0 1-6.723-4.823l-4.04 3.067A11.965 11.965 0 0 0 12 24c2.933 0 5.735-1.043 7.834-3l-3.793-2.987Z"/>
+            <path fill="#4A90D9" d="M19.834 21c2.195-2.048 3.62-5.096 3.62-9 0-.71-.109-1.473-.272-2.182H12v4.637h6.436c-.317 1.559-1.17 2.766-2.395 3.558L19.834 21Z"/>
+            <path fill="#FBBC05" d="M5.277 14.268A7.12 7.12 0 0 1 4.909 12c0-.782.125-1.533.357-2.235L1.24 6.65A11.934 11.934 0 0 0 0 12c0 1.92.445 3.73 1.237 5.335l4.04-3.067Z"/>
+          </svg>
+          Conectar Google Calendar
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+</div>

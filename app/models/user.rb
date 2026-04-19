@@ -31,6 +31,15 @@ class User < ApplicationRecord
     google_channel_expires_at.present? && google_channel_expires_at <= 1.day.from_now
   end
 
+  def disconnect_google!
+    update!(
+      google_oauth_token:      nil,
+      google_refresh_token:    nil,
+      google_token_expires_at: nil,
+      google_calendar_id:      nil
+    )
+  end
+
   def display_name
     name.presence || email
   end

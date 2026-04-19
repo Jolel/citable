@@ -28,6 +28,10 @@ Rails.application.routes.draw do
 
     resource :settings, only: %i[show update]
 
+    resource :google_calendar, only: [] do
+      delete :disconnect, on: :member
+    end
+
     resource :google_oauth, only: [] do
       get    :connect
       get    :callback
