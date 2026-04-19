@@ -2,7 +2,7 @@
 
 ## Stack
 - **Framework**: Ruby on Rails 8.1.3 + Hotwire (Turbo + Stimulus)
-- **Ruby**: 3.2.2 (managed via rbenv)
+- **Ruby**: 3.3.6 (managed via rbenv)
 - **Database**: PostgreSQL (development + production)
 - **Background jobs**: Solid Queue (Rails 8 default, no Redis required)
 - **Cache**: Solid Cache (Rails 8 default)
@@ -13,7 +13,7 @@
 - **Payments**: stripe gem (Stripe Mexico - Payment Intents + Billing)
 - **Email**: resend gem (transactional fallback)
 - **Money**: money-rails (integer cents, MXN default)
-- **Hosting target**: Hatchbox on DigitalOcean or Render
+- **Hosting**: Kamal with Docker (production); multi-database Solid stack (cache/queue/cable)
 
 ## Key Gems Added
 ```
@@ -60,8 +60,9 @@ Secrets are stored in Rails encrypted credentials. Keys needed:
 
 Edit with: `rails credentials:edit`
 
-## CI (planned)
-GitHub Actions: rspec + rubocop + brakeman
+## CI
+`bin/ci` runs: Brakeman → bundler-audit → importmap audit → Rubocop → RSpec (`bin/rails db:test:prepare` first).
+GitHub Actions mirrors this sequence.
 
 ## Queue Architecture
 Three named Solid Queue queues:

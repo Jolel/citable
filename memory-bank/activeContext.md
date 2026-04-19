@@ -7,7 +7,7 @@ Google OAuth2 + Calendar sync feature complete. Next phase is Twilio WhatsApp, S
 ## What Was Just Built (Foundation)
 
 ### Migrations (db/migrate/)
-All 9 migrations written, ready to run:
+11 migrations total:
 1. `create_accounts` — tenant root
 2. `devise_create_users` — auth + custom fields
 3. `create_services`
@@ -17,6 +17,8 @@ All 9 migrations written, ready to run:
 7. `create_bookings` — full state + deposit tracking
 8. `create_message_logs` — append-only audit trail
 9. `create_reminder_schedules` — unique per booking+kind
+10. `add_google_watch_fields_to_users` — adds google_token_expires_at, google_channel_id, google_channel_expires_at, google_sync_token
+11. `add_google_token_expires_at_to_users` — duplicate of column in migration 10; **bug: will fail on fresh db:migrate**
 
 ### Models (app/models/)
 - `Account` — validations, free/pro tier logic, quota check
@@ -44,7 +46,7 @@ All 9 migrations written, ready to run:
 ### Jobs (app/jobs/)
 - `ReminderJob` — routes to WhatsApp or email fallback, marks sent
 - `WhatsappSendJob` — Twilio integration, MessageLog creation, quota increment
-- `GoogleCalendarSyncJob` — full implementation; called on booking create/update/cancel
+- `GoogleCalendarSyncJob` — full implementation; called on booking create/update/cancel via after_create_commit/after_update_commit callbacks
 - `RenewGoogleWatchJob` — daily recurring; renews Google push notification channels before 7-day expiry
 
 ### Config
@@ -94,9 +96,11 @@ Creates: Account "Estudio de Ana" (subdomain: ana), owner user ana@example.com, 
 - **`deposit_state` enum** uses prefixed values (`deposit_pending`, `deposit_paid`, `deposit_refunded`) to avoid conflict with `:pending` status enum on same model.
 - **Public booking page** uses subdomain tenant resolution (same as dashboard) but has no auth requirement.
 - **`Customer.find_or_create_by!(phone:)`** in the public flow — phone is the customer identifier since they come from WhatsApp.
-- **Google OAuth callback uses fixed host** — subdomain-based OAuth redirect URIs don't work with Google's wildcard restriction. The tenant is resolved from the user session, not the subdomain, during the callback.
+- **Google OAuth uses manual Signet controller** (no OmniAuth gem) — `Dashboard::GoogleOauthController` handles connect/callback/disconnect. OAuth redirect URI is `/dashboard/google_oauth/callback` (fixed host, no subdomain).
+- **Google OAuth state** is HMAC-SHA256 signed with `secret_key_base` to prevent CSRF on the callback.
 - **Google Calendar sync is per-staff**, not per-account. Each staff member connects their own Google account.
 - **`Booking#skip_google_sync`** attr_accessor prevents infinite loop when the webhook controller updates a booking time received from Google.
+- **Google tokens encrypted** at rest via `encrypts :google_oauth_token`, `:google_refresh_token`, `:google_sync_token` — requires `active_record.encryption.*` keys in credentials.
 
 ## Google Calendar — Out of Scope (v1)
 
