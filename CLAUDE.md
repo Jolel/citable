@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Session Start
+
+Read the memory bank before doing any work:
+
+```
+memory-bank/projectbrief.md
+memory-bank/productContext.md
+memory-bank/techContext.md
+memory-bank/systemPatterns.md
+memory-bank/activeContext.md
+memory-bank/progress.md
+```
+
+After significant decisions or completed features, update the relevant memory bank file(s) to keep them current.
+
 ## What This App Is
 
 Citable is a WhatsApp-based appointment booking SaaS for Mexican service businesses (salons, etc.). Businesses get a subdomain (e.g., `ana.citable.mx`), define services and staff schedules, and customers book via a public `/reservar` page. The system sends WhatsApp confirmations and reminders via Twilio. Customers reply "1" to confirm or "2" to cancel. Free accounts get 100 WhatsApp messages/month; Pro gets 1000.
