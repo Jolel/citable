@@ -2,7 +2,6 @@ class Dashboard::BookingsController < Dashboard::BaseController
   before_action :set_booking, only: %i[show edit update destroy confirm cancel]
 
   def index
-    
     @bookings = Booking.includes(:customer, :service, :user)
                        .order(:starts_at)
     @bookings = case params[:filter]
