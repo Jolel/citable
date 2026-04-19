@@ -60,6 +60,11 @@ gem "resend"
 # Money/currency helpers (store prices as integer cents)
 gem "money-rails"
 
+# Google Calendar OAuth2 + API
+gem "omniauth-google-oauth2"
+gem "omniauth-rails_csrf_protection"
+gem "google-apis-calendar_v3"
+
 group :development, :test do
   gem "byebug"
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
