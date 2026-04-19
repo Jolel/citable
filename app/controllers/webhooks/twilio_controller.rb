@@ -1,12 +1,15 @@
 class Webhooks::TwilioController < ActionController::Base
   skip_forgery_protection
 
+  before_action :verify_twilio_signature
+
   def create
     from = params[:From]
     body = params[:Body]&.strip
 
+    normalized = from.gsub(/\D/, "")
     customer = Customer.joins(:account)
-                       .find_by("phone LIKE ?", "%#{from.gsub(/\D/, "").last(10)}%")
+                       .find_by("regexp_replace(phone, '[^0-9]', '', 'g') = ?", normalized)
 
     if customer
       ActsAsTenant.with_tenant(customer.account) do
@@ -18,6 +21,14 @@ class Webhooks::TwilioController < ActionController::Base
   end
 
   private
+
+  def verify_twilio_signature
+    auth_token = Rails.application.credentials.dig(:twilio, :auth_token)
+    validator  = Twilio::Security::RequestValidator.new(auth_token)
+    unless validator.validate(request.url, params.to_unsafe_h, request.headers["X-Twilio-Signature"])
+      head :forbidden
+    end
+  end
 
   def handle_reply(customer, body)
     pending_booking = customer.bookings.active.upcoming.first

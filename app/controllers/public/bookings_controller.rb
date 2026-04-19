@@ -15,8 +15,7 @@ class Public::BookingsController < ApplicationController
     if @booking.save
       WhatsappSendJob.perform_later(@booking.id, :confirmation)
       GoogleCalendarSyncJob.perform_later(@booking.id)
-      ReminderJob.set(wait_until: @booking.starts_at - 24.hours).perform_later(@booking.id, "24h")
-      ReminderJob.set(wait_until: @booking.starts_at - 2.hours).perform_later(@booking.id, "2h")
+      schedule_reminders(@booking)
       redirect_to public_booking_confirmation_path(@booking)
     else
       @services = Service.active
@@ -37,8 +36,23 @@ class Public::BookingsController < ApplicationController
   end
 
   def find_or_create_customer
-    Customer.find_or_create_by!(phone: params[:customer_phone]) do |c|
-      c.name = params[:customer_name]
+    raw_phone = params[:customer_phone].to_s.strip
+    raise ActionController::BadRequest, "Teléfono requerido" if raw_phone.blank?
+
+    Customer.find_or_create_by!(phone: raw_phone) do |c|
+      c.name = params[:customer_name].to_s.strip
+    end
+  end
+
+  def schedule_reminders(booking)
+    [{ kind: "24h", offset: 24.hours }, { kind: "2h", offset: 2.hours }].each do |reminder|
+      fire_at = booking.starts_at - reminder[:offset]
+      next if fire_at <= Time.current
+
+      ReminderSchedule.find_or_create_by!(account: current_tenant, booking: booking, kind: reminder[:kind]) do |r|
+        r.scheduled_for = fire_at
+      end
+      ReminderJob.set(wait_until: fire_at).perform_later(booking.id, reminder[:kind])
     end
   end
 

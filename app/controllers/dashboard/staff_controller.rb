@@ -15,6 +15,11 @@ class Dashboard::StaffController < Dashboard::BaseController
   end
 
   def create
+    if current_account.free? && current_account.users.count >= 2
+      redirect_to dashboard_staff_index_path, alert: "El plan Libre permite hasta 2 colaboradores. Actualiza a Pro para agregar más."
+      return
+    end
+
     @staff_member = User.new(staff_params)
     @staff_member.account = current_account
     @staff_member.role = :staff
@@ -29,7 +34,11 @@ class Dashboard::StaffController < Dashboard::BaseController
   end
 
   def update
-    if @staff_member.update(staff_params.except(:password, :password_confirmation).reject { |_, v| v.blank? }.merge(staff_params.slice(:password, :password_confirmation).reject { |_, v| v.blank? }))
+    attrs = staff_params.except(:password, :password_confirmation)
+    if staff_params[:password].present?
+      attrs = attrs.merge(password: staff_params[:password], password_confirmation: staff_params[:password_confirmation])
+    end
+    if @staff_member.update(attrs)
       redirect_to dashboard_staff_path(@staff_member), notice: "Colaborador actualizado."
     else
       render :edit, status: :unprocessable_entity
