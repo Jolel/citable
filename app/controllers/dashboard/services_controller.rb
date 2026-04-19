@@ -13,6 +13,11 @@ class Dashboard::ServicesController < Dashboard::BaseController
   end
 
   def create
+    if current_account.free? && Service.count >= 3
+      redirect_to dashboard_services_path, alert: "El plan Libre permite hasta 3 servicios. Actualiza a Pro para agregar más."
+      return
+    end
+
     @service = Service.new(service_params)
     if @service.save
       redirect_to dashboard_services_path, notice: "Servicio creado exitosamente."

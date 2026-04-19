@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-UI phase complete. Next phase is integrations (Twilio WhatsApp, Stripe deposits) and production readiness.
+Security & logic fixes merged (PR #14). Next phase is integrations (Twilio WhatsApp, Stripe deposits) and production readiness.
 
 ## What Was Just Built (Foundation)
 
@@ -91,4 +91,8 @@ Creates: Account "Estudio de Ana" (subdomain: ana), owner user ana@example.com, 
 - **Email for `User` must be unique globally**, not just per-tenant. Devise requires this. Users can belong to one account only.
 - **`deposit_state` enum** uses prefixed values (`deposit_pending`, `deposit_paid`, `deposit_refunded`) to avoid conflict with `:pending` status enum on same model.
 - **Public booking page** uses subdomain tenant resolution (same as dashboard) but has no auth requirement.
-- **`Customer.find_or_create_by!(phone:)`** in the public flow — phone is the customer identifier since they come from WhatsApp.
+- **`Customer.find_or_create_by!(phone:)`** in the public flow — phone is the customer identifier since they come from WhatsApp. `(account_id, phone)` is now a unique index (migration 20260418000010).
+- **WhatsApp quota is enforced atomically** via `UPDATE … WHERE quota_used < limit` in `WhatsappSendJob`. The slot is decremented on Twilio failure so it is not wasted.
+- **Twilio inbound webhook** requires a valid `X-Twilio-Signature` (verified via `Twilio::Security::RequestValidator`). Phone matching uses `regexp_replace` to compare digits-only on both sides.
+- **`Customer#normalized_phone`** strips all non-digit/non-`+` chars, preserving the leading `+` for valid E.164 format required by Twilio WhatsApp API.
+- **`schedule_reminders`** is duplicated in both `Dashboard::BookingsController` and `Public::BookingsController` (intentional for now). Both skip reminders whose `fire_at` is already in the past.

@@ -76,18 +76,19 @@ class Dashboard::BookingsController < Dashboard::BaseController
   def booking_params
     params.require(:booking).permit(
       :customer_id, :service_id, :user_id, :starts_at,
-      :address, :recurrence_rule_id, :status
+      :address, :recurrence_rule_id
     )
   end
 
   def schedule_reminders(booking)
-    ReminderSchedule.find_or_create_by!(account: current_account, booking: booking, kind: "24h") do |r|
-      r.scheduled_for = booking.starts_at - 24.hours
+    [{ kind: "24h", offset: 24.hours }, { kind: "2h", offset: 2.hours }].each do |reminder|
+      fire_at = booking.starts_at - reminder[:offset]
+      next if fire_at <= Time.current
+
+      ReminderSchedule.find_or_create_by!(account: current_account, booking: booking, kind: reminder[:kind]) do |r|
+        r.scheduled_for = fire_at
+      end
+      ReminderJob.set(wait_until: fire_at).perform_later(booking.id, reminder[:kind])
     end
-    ReminderSchedule.find_or_create_by!(account: current_account, booking: booking, kind: "2h") do |r|
-      r.scheduled_for = booking.starts_at - 2.hours
-    end
-    ReminderJob.set(wait_until: booking.starts_at - 24.hours).perform_later(booking.id, "24h")
-    ReminderJob.set(wait_until: booking.starts_at - 2.hours).perform_later(booking.id, "2h")
   end
 end

@@ -20,7 +20,8 @@ class Customer < ApplicationRecord
     bookings.where("starts_at <= ?", Time.current).order(starts_at: :desc)
   end
 
+  # Strips whitespace, dashes, parens — preserves leading + for E.164
   def normalized_phone
-    phone.gsub(/\D/, "")
+    phone.gsub(/[^\d+]/, "")
   end
 end

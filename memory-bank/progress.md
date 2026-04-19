@@ -61,9 +61,21 @@
 
 - `WhatsappSendJob`: message templates in `build_message` are placeholders, need to match Twilio-approved templates exactly
 - `GoogleCalendarSyncJob`: `create_event`/`update_event` are stubs — need `google-api-ruby-client` gem added
-- `Public::BookingsController#find_or_create_customer`: phone uniqueness is global, should validate format before lookup
-- `Dashboard::BookingsController#schedule_reminders`: should check if `starts_at` is in the past before enqueuing
 - Devise `email` uniqueness is global (not per-tenant) — acceptable for v1, may need per-tenant email in v2
+
+## Fixed in PR #14 (security & logic review)
+
+- ~~`Webhooks::TwilioController`: no signature verification~~ → `Twilio::Security::RequestValidator` added
+- ~~`Dashboard::BookingsController`: `:status` mass-assignable~~ → removed from permitted params
+- ~~`WhatsappSendJob`: quota check + increment not atomic~~ → single `UPDATE … WHERE quota_used < limit`; quota rolled back on Twilio failure
+- ~~`Public::BookingsController`: no `ReminderSchedule` rows created, no past-date guard~~ → `schedule_reminders` extracted, matches dashboard flow
+- ~~Free-tier caps not enforced~~ → ServicesController blocks >3 services, StaffController blocks >2 collaborators
+- ~~`(account_id, phone)` index not unique~~ → migration `20260418000010` adds `unique: true`
+- ~~`Customer#normalized_phone` strips `+`~~ → preserves `+` for valid E.164
+- ~~Twilio inbound phone matched on last 10 digits~~ → `regexp_replace` on both sides
+- ~~`build_message` returns nil for unknown kind~~ → raises `ArgumentError`
+- ~~Twilio credentials as class-level constants~~ → lazy `dig!` calls in `perform`/`send_message`
+- ~~`StaffController#update` password logic unreadable~~ → simple conditional
 
 ## Phased Roadmap Alignment
 
