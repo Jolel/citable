@@ -27,13 +27,15 @@ Rails.application.routes.draw do
     resources :staff, only: %i[index show new create edit update destroy]
 
     resource :settings, only: %i[show update]
+
     resource :google_calendar, only: [] do
       delete :disconnect, on: :member
     end
 
-    resource :google_oauth, only: [], path: "google_oauth" do
-      get :authorize, on: :collection
-      get :callback,  on: :collection
+    resource :google_oauth, only: [] do
+      get    :connect
+      get    :callback
+      delete :disconnect
     end
   end
 
@@ -41,6 +43,7 @@ Rails.application.routes.draw do
   namespace :webhooks do
     post :twilio
     post :stripe
+    post :google_calendar
   end
 
   # Public booking pages (subdomain-based tenant resolution happens in ApplicationController)

@@ -1,6 +1,10 @@
 # Solid Queue recurring tasks
-# Uncomment and configure when needed
-#
+
+renew_google_watch:
+  class: RenewGoogleWatchJob
+  schedule: every day at 2am
+  queue: default
+
 # GC stale reminder schedules (example):
 # cleanup_sent_reminders:
 #   class: CleanupSentRemindersJob

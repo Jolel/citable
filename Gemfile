@@ -60,7 +60,7 @@ gem "resend"
 # Money/currency helpers (store prices as integer cents)
 gem "money-rails"
 
-# Google Calendar OAuth2 + API
+# Google Calendar API + Signet OAuth2
 gem "googleauth"
 gem "google-apis-calendar_v3"
 

@@ -9,6 +9,8 @@ class Booking < ApplicationRecord
   has_many :message_logs, dependent: :destroy
   has_many :reminder_schedules, dependent: :destroy
 
+  attr_accessor :skip_google_sync
+
   enum :status, {
     pending: "pending",
     confirmed: "confirmed",
@@ -38,12 +40,17 @@ class Booking < ApplicationRecord
 
   before_validation :set_ends_at
 
+  after_create_commit  :enqueue_google_calendar_create
+  after_update_commit  :enqueue_google_calendar_update
+
   def confirm!
     update!(status: :confirmed, confirmed_at: Time.current)
   end
 
   def cancel!
+    self.skip_google_sync = true
     update!(status: :cancelled)
+    GoogleCalendarSyncJob.perform_later(id, "cancel")
   end
 
   def recurring?
@@ -59,6 +66,17 @@ class Booking < ApplicationRecord
   def set_ends_at
     return if ends_at.present? || starts_at.blank? || service.blank?
     self.ends_at = starts_at + service.duration_minutes.minutes
+  end
+
+  def enqueue_google_calendar_create
+    GoogleCalendarSyncJob.perform_later(id, "create")
+  end
+
+  def enqueue_google_calendar_update
+    return if skip_google_sync
+    return unless saved_change_to_starts_at? || saved_change_to_ends_at? || saved_change_to_status?
+
+    GoogleCalendarSyncJob.perform_later(id, "update")
   end
 
   def ends_at_after_starts_at
