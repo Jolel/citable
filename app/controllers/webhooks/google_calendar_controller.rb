@@ -37,20 +37,16 @@ class Webhooks::GoogleCalendarController < ActionController::Base
   private
 
   def handle_initial_sync(user)
-    ActsAsTenant.with_tenant(user.account) do
-      service = GoogleCalendarService.new(user)
-      service.incremental_sync
-    end
+    service = GoogleCalendarService.new(user)
+    service.incremental_sync
   end
 
   def handle_incremental_sync(user)
-    ActsAsTenant.with_tenant(user.account) do
-      service = GoogleCalendarService.new(user)
-      changed_events = service.incremental_sync
+    service = GoogleCalendarService.new(user)
+    changed_events = service.incremental_sync
 
-      changed_events.each do |event|
-        process_event(user, event)
-      end
+    changed_events.each do |event|
+      process_event(user, event)
     end
   end
 

@@ -6,18 +6,4 @@ class ApplicationController < ActionController::Base
 
   # Changes to the importmap will invalidate the etag for HTML responses
   stale_when_importmap_changes
-
-  set_current_tenant_through_filter
-
-  before_action :resolve_tenant
-
-  private
-
-  def resolve_tenant
-    subdomain = request.subdomain
-    return if subdomain.blank? || subdomain == "www"
-
-    account = Account.find_by(subdomain: subdomain)
-    set_current_tenant(account) if account
-  end
 end

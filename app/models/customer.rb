@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class Customer < ApplicationRecord
-  acts_as_tenant :account
-
   belongs_to :account
   has_many :bookings, dependent: :destroy
   has_many :message_logs, dependent: :destroy

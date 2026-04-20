@@ -45,9 +45,6 @@ gem "image_processing", "~> 1.2"
 # Authentication
 gem "devise"
 
-# Multi-tenancy (row-level scoping via account_id)
-gem "acts_as_tenant"
-
 # Payments
 gem "stripe"
 

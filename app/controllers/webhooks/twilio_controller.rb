@@ -7,14 +7,9 @@ class Webhooks::TwilioController < ActionController::Base
     from = params[:From]
     body = params[:Body]&.strip
 
-    customer = Customer.joins(:account)
-                       .find_by("phone LIKE ?", "%#{from.gsub(/\D/, "").last(10)}%")
+    customer = Customer.find_by("phone LIKE ?", "%#{from.gsub(/\D/, "").last(10)}%")
 
-    if customer
-      ActsAsTenant.with_tenant(customer.account) do
-        handle_reply(customer, body)
-      end
-    end
+    handle_reply(customer, body) if customer
 
     head :ok
   end

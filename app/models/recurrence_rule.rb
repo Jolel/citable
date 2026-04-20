@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class RecurrenceRule < ApplicationRecord
-  acts_as_tenant :account
-
   FREQUENCIES = %w[weekly biweekly monthly].freeze
 
   belongs_to :account

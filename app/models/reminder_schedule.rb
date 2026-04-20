@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class ReminderSchedule < ApplicationRecord
-  acts_as_tenant :account
-
   KINDS = %w[24h 2h].freeze
 
   belongs_to :account

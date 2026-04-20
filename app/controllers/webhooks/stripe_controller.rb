@@ -31,18 +31,14 @@ class Webhooks::StripeController < ActionController::Base
     booking = Booking.find_by(stripe_payment_intent_id: payment_intent.id)
     return unless booking
 
-    ActsAsTenant.with_tenant(booking.account) do
-      booking.update!(deposit_state: :deposit_paid)
-      booking.confirm!
-    end
+    booking.update!(deposit_state: :deposit_paid)
+    booking.confirm!
   end
 
   def handle_payment_failed(payment_intent)
     booking = Booking.find_by(stripe_payment_intent_id: payment_intent.id)
     return unless booking
 
-    ActsAsTenant.with_tenant(booking.account) do
-      booking.update!(deposit_state: :deposit_pending)
-    end
+    booking.update!(deposit_state: :deposit_pending)
   end
 end

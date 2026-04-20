@@ -14,7 +14,7 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
     state_payload = Base64.strict_encode64(
       JSON.generate(
         user_id:   target_user.id,
-        return_to: request.referer || dashboard_staff_path(target_user)
+        return_to: extract_path(request.referer) || dashboard_staff_path(target_user)
       )
     )
     state_signed = "#{state_payload}.#{sign_state(state_payload)}"
@@ -34,7 +34,7 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
   # GET /dashboard/google_oauth/callback
   def callback
     state_signed = params[:state].to_s
-    payload_b64, signature = state_signed.rsplit(".", 2)
+    payload_b64, _, signature = state_signed.rpartition(".")
 
     unless ActiveSupport::SecurityUtils.secure_compare(signature.to_s, sign_state(payload_b64))
       redirect_to dashboard_root_path, alert: "Estado OAuth inválido. Inténtalo de nuevo."
@@ -67,13 +67,15 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
     service = GoogleCalendarService.new(target_user)
     service.ensure_calendar
 
-    webhook_url = webhooks_google_calendar_url(
-      host: request.host_with_port,
-      protocol: request.protocol
-    )
-    service.setup_watch(webhook_url)
+    if Rails.env.production?
+      webhook_url = webhooks_google_calendar_url(
+        host: request.host_with_port,
+        protocol: request.protocol
+      )
+      service.setup_watch(webhook_url)
+    end
 
-    return_to = state["return_to"].presence || dashboard_staff_path(target_user)
+    return_to = extract_path(state["return_to"]) || dashboard_staff_path(target_user)
     redirect_to return_to, notice: "Google Calendar conectado correctamente."
   rescue Signet::AuthorizationError, Google::Apis::AuthorizationError => e
     Rails.logger.error "[GoogleOauthController#callback] #{e.message}"
@@ -137,11 +139,19 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
       client_secret:        Rails.application.credentials.dig(:google, :client_secret),
       authorization_uri:    "https://accounts.google.com/o/oauth2/auth",
       token_credential_uri: "https://oauth2.googleapis.com/token",
-      redirect_uri:         dashboard_google_oauth_callback_url
+      redirect_uri:         Rails.application.credentials.dig(:google, :redirect_uri) ||
+                            callback_dashboard_google_oauth_url
     )
   end
 
   def sign_state(payload)
     OpenSSL::HMAC.hexdigest("SHA256", Rails.application.secret_key_base, payload)
+  end
+
+  def extract_path(url)
+    return nil if url.blank?
+    URI.parse(url).path.presence
+  rescue URI::InvalidURIError
+    nil
   end
 end

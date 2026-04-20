@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class Booking < ApplicationRecord
-  acts_as_tenant :account
-
   belongs_to :account
   belongs_to :customer
   belongs_to :service

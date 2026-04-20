@@ -5,8 +5,8 @@ class Dashboard::BookingsController < Dashboard::BaseController
   before_action :set_form_collections, only: %i[new create edit update]
 
   def index
-    @bookings = Booking.includes(:customer, :service, :user)
-                       .order(:starts_at)
+    @bookings = current_account.bookings.includes(:customer, :service, :user)
+                               .order(:starts_at)
     @bookings = case params[:filter]
     when "upcoming" then @bookings.upcoming
     when "today"    then @bookings.today
@@ -19,11 +19,11 @@ class Dashboard::BookingsController < Dashboard::BaseController
   end
 
   def new
-    @booking = Booking.new
+    @booking = current_account.bookings.build
   end
 
   def create
-    @booking = Booking.new(booking_params)
+    @booking = current_account.bookings.build(booking_params)
     if @booking.save
       redirect_to dashboard_booking_path(@booking), notice: "Cita creada exitosamente."
     else
@@ -60,13 +60,13 @@ class Dashboard::BookingsController < Dashboard::BaseController
   private
 
   def set_booking
-    @booking = Booking.find(params[:id])
+    @booking = current_account.bookings.find(params[:id])
   end
 
   def set_form_collections
-    @services = Service.active
+    @services = current_account.services.active
     @staff = current_account.users
-    @customers = Customer.by_name
+    @customers = current_account.customers.by_name
   end
 
   def booking_params

@@ -32,7 +32,7 @@ Rails.application.routes.draw do
       delete :disconnect, on: :member
     end
 
-    resource :google_oauth, only: [] do
+    resource :google_oauth, only: [], controller: "google_oauth" do
       get    :connect
       get    :callback
       delete :disconnect
@@ -46,11 +46,11 @@ Rails.application.routes.draw do
     post :google_calendar
   end
 
-  # Public booking pages (subdomain-based tenant resolution happens in ApplicationController)
+  # Public booking pages (account resolved from :slug in path)
   scope module: :public do
-    get  "/reservar",            to: "bookings#new",          as: :public_booking
-    post "/reservar",            to: "bookings#create"
-    get  "/reservar/confirmada/:id", to: "bookings#confirmation", as: :public_booking_confirmation
+    get  "/reservar/:slug",                  to: "bookings#new",          as: :public_booking
+    post "/reservar/:slug",                  to: "bookings#create"
+    get  "/reservar/:slug/confirmada/:id",   to: "bookings#confirmation", as: :public_booking_confirmation
   end
 
   # Default root
