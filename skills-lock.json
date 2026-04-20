@@ -21,6 +21,14 @@
     "sandi-metz-rules": {
       "source": "lucianghinda/superpowers-ruby",
       "sourceType": "github"
+    },
+    "rspec-testing": {
+      "source": "dgalarza/claude-code-workflows",
+      "sourceType": "github"
+    },
+    "test-driven-development": {
+      "source": "lucianghinda/superpowers-ruby",
+      "sourceType": "github"
     }
   }
 }
