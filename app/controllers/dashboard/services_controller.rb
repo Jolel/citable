@@ -4,18 +4,18 @@ class Dashboard::ServicesController < Dashboard::BaseController
   before_action :set_service, only: %i[show edit update destroy toggle_active]
 
   def index
-    @services = Service.order(:name)
+    @services = current_account.services.order(:name)
   end
 
   def show
   end
 
   def new
-    @service = Service.new
+    @service = current_account.services.build
   end
 
   def create
-    @service = Service.new(service_params)
+    @service = current_account.services.build(service_params)
     if @service.save
       redirect_to dashboard_services_path, notice: "Servicio creado exitosamente."
     else
@@ -47,7 +47,7 @@ class Dashboard::ServicesController < Dashboard::BaseController
   private
 
   def set_service
-    @service = Service.find(params[:id])
+    @service = current_account.services.find(params[:id])
   end
 
   def service_params
