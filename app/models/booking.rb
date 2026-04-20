@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Booking < ApplicationRecord
   acts_as_tenant :account
 
@@ -40,8 +42,8 @@ class Booking < ApplicationRecord
 
   before_validation :set_ends_at
 
-  after_create_commit  :enqueue_google_calendar_create
-  after_update_commit  :enqueue_google_calendar_update
+  after_create_commit :enqueue_google_calendar_create, :schedule_reminder_jobs
+  after_update_commit :enqueue_google_calendar_update
 
   def confirm!
     update!(status: :confirmed, confirmed_at: Time.current)
@@ -66,6 +68,17 @@ class Booking < ApplicationRecord
   def set_ends_at
     return if ends_at.present? || starts_at.blank? || service.blank?
     self.ends_at = starts_at + service.duration_minutes.minutes
+  end
+
+  def schedule_reminder_jobs
+    ReminderSchedule.find_or_create_by!(account: account, booking: self, kind: "24h") do |r|
+      r.scheduled_for = starts_at - 24.hours
+    end
+    ReminderSchedule.find_or_create_by!(account: account, booking: self, kind: "2h") do |r|
+      r.scheduled_for = starts_at - 2.hours
+    end
+    ReminderJob.set(wait_until: starts_at - 24.hours).perform_later(id, "24h")
+    ReminderJob.set(wait_until: starts_at - 2.hours).perform_later(id, "2h")
   end
 
   def enqueue_google_calendar_create

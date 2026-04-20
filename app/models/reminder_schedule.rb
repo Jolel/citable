@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ReminderSchedule < ApplicationRecord
   acts_as_tenant :account
 

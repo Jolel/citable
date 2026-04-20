@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Dashboard::ServicesController < Dashboard::BaseController
   before_action :set_service, only: %i[show edit update destroy toggle_active]
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Dashboard::CustomersController < Dashboard::BaseController
   before_action :set_customer, only: %i[show edit update destroy]
 

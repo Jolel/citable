@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Webhooks::TwilioController < ActionController::Base
   skip_forgery_protection
 

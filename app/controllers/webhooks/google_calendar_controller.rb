@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Webhooks::GoogleCalendarController < ActionController::Base
   protect_from_forgery with: :null_session
 

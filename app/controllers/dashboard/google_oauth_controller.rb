@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Dashboard::GoogleOauthController < Dashboard::BaseController
   SCOPES = %w[
     https://www.googleapis.com/auth/calendar
@@ -87,10 +89,10 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
       begin
         service = GoogleCalendarService.new(target_user)
         channel = Google::Apis::CalendarV3::Channel.new(
-          id:           target_user.google_channel_id,
-          resource_id:  nil
+          id:          target_user.google_channel_id,
+          resource_id: nil
         )
-        service.instance_variable_get(:@service).stop_channel(channel)
+        service.stop_channel(channel)
       rescue StandardError => e
         Rails.logger.warn "[GoogleOauthController#disconnect] Could not stop channel: #{e.message}"
       end

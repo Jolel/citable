@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class GoogleCalendarService
   CALENDAR_SUMMARY = "Citable"
 
@@ -83,6 +85,10 @@ class GoogleCalendarService
       full_sync_and_get_token
       []
     end
+  end
+
+  def stop_channel(channel)
+    @service.stop_channel(channel)
   end
 
   def refresh_token!

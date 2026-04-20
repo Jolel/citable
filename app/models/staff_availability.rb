@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class StaffAvailability < ApplicationRecord
   acts_as_tenant :account
 

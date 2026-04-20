@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ReminderJob < ApplicationJob
   queue_as :reminders
 

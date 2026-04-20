@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class RenewGoogleWatchJob < ApplicationJob
   queue_as :default
 

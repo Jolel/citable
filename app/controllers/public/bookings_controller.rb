@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Public::BookingsController < ApplicationController
   before_action :require_account!
 
@@ -14,9 +16,6 @@ class Public::BookingsController < ApplicationController
 
     if @booking.save
       WhatsappSendJob.perform_later(@booking.id, :confirmation)
-      GoogleCalendarSyncJob.perform_later(@booking.id)
-      ReminderJob.set(wait_until: @booking.starts_at - 24.hours).perform_later(@booking.id, "24h")
-      ReminderJob.set(wait_until: @booking.starts_at - 2.hours).perform_later(@booking.id, "2h")
       redirect_to public_booking_confirmation_path(@booking)
     else
       @services = Service.active
