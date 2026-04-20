@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Dashboard::StaffController < Dashboard::BaseController
   before_action :require_owner!
   before_action :set_staff_member, only: %i[show edit update destroy]

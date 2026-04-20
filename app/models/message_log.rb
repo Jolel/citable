@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class MessageLog < ApplicationRecord
   acts_as_tenant :account
 

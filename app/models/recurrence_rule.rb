@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class RecurrenceRule < ApplicationRecord
   acts_as_tenant :account
 

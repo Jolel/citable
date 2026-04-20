@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Webhooks::StripeController < ActionController::Base
   skip_forgery_protection
 
