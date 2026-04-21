@@ -36,8 +36,8 @@ RSpec.describe Customer, type: :model do
 
   describe "scopes" do
     let(:account) { create(:account) }
-    let!(:vip_customer) { create(:customer, account: account, tags: ["vip", "regular"]) }
-    let!(:regular_customer) { create(:customer, account: account, tags: ["regular"]) }
+    let!(:vip_customer) { create(:customer, account: account, tags: [ "vip", "regular" ]) }
+    let!(:regular_customer) { create(:customer, account: account, tags: [ "regular" ]) }
     let!(:new_customer) { create(:customer, account: account, tags: []) }
 
     describe ".with_tag" do
@@ -58,7 +58,7 @@ RSpec.describe Customer, type: :model do
       it "orders customers alphabetically by name" do
         a = create(:customer, account: account, name: "Ana")
         b = create(:customer, account: account, name: "Beatriz")
-        expect(account.customers.by_name.to_a.first(2)).to eq([a, b])
+        expect(account.customers.by_name.to_a.first(2)).to eq([ a, b ])
       end
     end
   end
