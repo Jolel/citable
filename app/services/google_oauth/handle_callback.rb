@@ -21,7 +21,7 @@ module GoogleOauth
       policy = CalendarAccessPolicy.new(current_user: current_user, target_user: user)
       return Failure(policy.error) unless policy.allowed?
 
-      Success([user, state_data])
+      Success([ user, state_data ])
     end
 
     def connect(user, code, redirect_uri, webhook_url, return_to)

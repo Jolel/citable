@@ -14,9 +14,9 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
     )
 
     case result
-    in Success[auth_uri]
+    in Success[ auth_uri ]
       redirect_to auth_uri, allow_other_host: true
-    in Failure[reason]
+    in Failure[ reason ]
       redirect_to dashboard_root_path, alert: t(".#{reason}")
     end
   end
@@ -33,15 +33,15 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
     )
 
     case result
-    in Success[{ user:, return_to: }]
+    in Success[ { user:, return_to: } ]
       redirect_to extract_path(return_to) || dashboard_staff_path(user), notice: t(".connected")
-    in Failure[:invalid_state]
+    in Failure[ :invalid_state ]
       redirect_to dashboard_root_path, alert: t(".invalid_state")
-    in Failure[:user_not_found]
+    in Failure[ :user_not_found ]
       redirect_to dashboard_root_path, alert: t(".user_not_found")
-    in Failure[:access_denied]
+    in Failure[ :access_denied ]
       redirect_to dashboard_root_path, alert: t(".access_denied")
-    in Failure[reason]
+    in Failure[ reason ]
       Rails.logger.error "[GoogleOauthController#callback] #{reason}"
       redirect_to dashboard_root_path, alert: t(".connection_failed")
     end
