@@ -4,7 +4,7 @@ class Webhooks::TwilioController < ActionController::Base
   skip_forgery_protection
   before_action :verify_twilio_signature
 
-  TWILIO_AUTH_TOKEN = Rails.application.credentials.dig(:twilio, :auth_token)
+  TWILIO_AUTH_TOKEN = Rails.application.credentials.dig(:twilio, :auth_token) || ""
 
   def create
     TwilioWebhook::HandleReply.call(
