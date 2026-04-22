@@ -6,6 +6,8 @@ RSpec.describe "Webhooks::Twilio", type: :request do
   before do
     allow(GoogleCalendarSyncJob).to receive(:perform_later)
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))
+    allow_any_instance_of(Twilio::Security::RequestValidator)
+      .to receive(:validate).and_return(true)
   end
 
   let(:account) { create(:account) }
@@ -22,6 +24,23 @@ RSpec.describe "Webhooks::Twilio", type: :request do
   end
 
   describe "POST /webhooks/twilio" do
+    context "with invalid Twilio signature" do
+      before do
+        allow_any_instance_of(Twilio::Security::RequestValidator)
+          .to receive(:validate).and_return(false)
+      end
+
+      it "returns 403" do
+        post_twilio(from: "whatsapp:+5215512345678", body: "1")
+        expect(response).to have_http_status(:forbidden)
+      end
+
+      it "does not change booking status" do
+        expect { post_twilio(from: "whatsapp:+5215512345678", body: "1") }
+          .not_to change { booking.reload.status }
+      end
+    end
+
     it "returns 200 OK" do
       post_twilio(from: "whatsapp:+5215512345678", body: "1")
       expect(response).to have_http_status(:ok)
@@ -42,6 +61,7 @@ RSpec.describe "Webhooks::Twilio", type: :request do
         expect(log.direction).to eq("inbound")
         expect(log.channel).to eq("whatsapp")
         expect(log.body).to eq("1")
+        expect(log.status).to eq("delivered")
       end
     end
 
