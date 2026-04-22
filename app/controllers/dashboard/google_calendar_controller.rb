@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Dashboard::GoogleCalendarController < Dashboard::BaseController
   def disconnect
     current_user.disconnect_google!

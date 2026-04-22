@@ -4,8 +4,7 @@ Rails.application.routes.draw do
 
   # Devise auth (scoped to dashboard)
   devise_for :users, path: "dashboard/auth",
-             path_names: { sign_in: "entrar", sign_out: "salir", sign_up: "registrarse" },
-             controllers: { omniauth_callbacks: "users/omniauth_callbacks" }
+             path_names: { sign_in: "entrar", sign_out: "salir", sign_up: "registrarse" }
 
   # Owner / staff dashboard
   namespace :dashboard do
@@ -19,31 +18,40 @@ Rails.application.routes.draw do
     end
 
     resources :customers
-    resources :services do
+    resources :services, except: :destroy do
       member do
         patch :toggle_active
+        patch :deactivate
       end
     end
 
     resources :staff, only: %i[index show new create edit update destroy]
 
     resource :settings, only: %i[show update]
-    resource :google_calendar, only: [] do
+
+    resource :google_calendar, only: [], controller: "google_calendar" do
       delete :disconnect, on: :member
+    end
+
+    resource :google_oauth, only: [], controller: "google_oauth" do
+      get    :connect
+      get    :callback
+      delete :disconnect
     end
   end
 
   # Inbound webhooks (no auth, no CSRF)
   namespace :webhooks do
-    post :twilio
-    post :stripe
+    post "twilio",          to: "twilio#create",          as: :twilio
+    post "stripe",          to: "stripe#create",          as: :stripe
+    post "google_calendar", to: "google_calendar#create", as: :google_calendar
   end
 
-  # Public booking pages (subdomain-based tenant resolution happens in ApplicationController)
+  # Public booking pages (account resolved from :slug in path)
   scope module: :public do
-    get  "/reservar",            to: "bookings#new",          as: :public_booking
-    post "/reservar",            to: "bookings#create"
-    get  "/reservar/confirmada/:id", to: "bookings#confirmation", as: :public_booking_confirmation
+    get  "/reservar/:slug",                  to: "bookings#new",          as: :public_booking
+    post "/reservar/:slug",                  to: "bookings#create"
+    get  "/reservar/:slug/confirmada/:id",   to: "bookings#confirmation", as: :public_booking_confirmation
   end
 
   # Default root

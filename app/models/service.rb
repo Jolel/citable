@@ -1,6 +1,6 @@
-class Service < ApplicationRecord
-  acts_as_tenant :account
+# frozen_string_literal: true
 
+class Service < ApplicationRecord
   belongs_to :account
   has_many :bookings, dependent: :restrict_with_error
 

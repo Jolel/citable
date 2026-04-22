@@ -1,23 +1,23 @@
+# frozen_string_literal: true
+
 class ReminderJob < ApplicationJob
   queue_as :reminders
 
   def perform(booking_id, kind)
-    booking = ActsAsTenant.without_tenant { Booking.find_by(id: booking_id) }
+    booking = Booking.find_by(id: booking_id)
     return unless booking
     return if booking.cancelled?
 
-    ActsAsTenant.with_tenant(booking.account) do
-      schedule = booking.reminder_schedules.find_by(kind: kind)
-      return if schedule&.sent?
+    schedule = booking.reminder_schedules.find_by(kind: kind)
+    return if schedule&.sent?
 
-      if booking.account.whatsapp_quota_exceeded?
-        send_email_reminder(booking, kind)
-      else
-        send_whatsapp_reminder(booking, kind)
-      end
-
-      schedule&.mark_sent!
+    if booking.account.whatsapp_quota_exceeded?
+      send_email_reminder(booking, kind)
+    else
+      send_whatsapp_reminder(booking, kind)
     end
+
+    schedule&.mark_sent!
   end
 
   private

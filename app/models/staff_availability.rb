@@ -1,6 +1,6 @@
-class StaffAvailability < ApplicationRecord
-  acts_as_tenant :account
+# frozen_string_literal: true
 
+class StaffAvailability < ApplicationRecord
   DAYS = %w[sunday monday tuesday wednesday thursday friday saturday].freeze
 
   belongs_to :account

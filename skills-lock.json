@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "skills": {
+    "clean-ddd-hexagonal": {
+      "source": "ccheney/robust-skills",
+      "sourceType": "github",
+      "computedHash": "b9a54e257685086d0034bd8277964452b7208e2f18bf68d158996936ce667b6a"
+    },
+    "37signals-style": {
+      "source": "lucianghinda/superpowers-ruby",
+      "sourceType": "github"
+    },
+    "hwc-stimulus-fundamentals": {
+      "source": "lucianghinda/superpowers-ruby",
+      "sourceType": "github"
+    },
+    "ruby": {
+      "source": "lucianghinda/superpowers-ruby",
+      "sourceType": "github"
+    },
+    "sandi-metz-rules": {
+      "source": "lucianghinda/superpowers-ruby",
+      "sourceType": "github"
+    },
+    "rspec-testing": {
+      "source": "dgalarza/claude-code-workflows",
+      "sourceType": "github"
+    },
+    "test-driven-development": {
+      "source": "lucianghinda/superpowers-ruby",
+      "sourceType": "github"
+    }
+  }
+}

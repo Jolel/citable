@@ -81,6 +81,22 @@ enum :status, { pending: "pending", confirmed: "confirmed" }, default: "pending"
 ```
 String values (not integers) for readability in DB and easier migrations.
 
+## Google Calendar Integration Pattern
+
+Two-way sync per staff member:
+1. Staff connects via `Dashboard::GoogleOauthController` — Signet OAuth2, state param signed with HMAC-SHA256
+2. `GoogleCalendarService` wraps all API calls; `with_token_refresh` retries once on 401
+3. `Booking` model fires `GoogleCalendarSyncJob` on `after_create_commit` / `after_update_commit` / `cancel!`
+4. `Booking#skip_google_sync` (attr_accessor) prevents echo-back when the webhook controller updates a booking
+5. `Webhooks::GoogleCalendarController` receives push notifications, uses `google_sync_token` for incremental sync
+6. `RenewGoogleWatchJob` runs daily to renew push channels before Google's 7-day expiry
+
+Controller hierarchy addition:
+```
+ActionController::Base (direct, no CSRF)
+  └── Webhooks::GoogleCalendarController
+```
+
 ## Key Indexes
 
 - `accounts.subdomain` — unique, used on every request for tenant lookup

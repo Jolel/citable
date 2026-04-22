@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es-MX">
   <head>
-    <title><%= content_for(:title) || "#{current_tenant&.name || 'Citable'} — Reserva tu cita" %></title>
+    <title><%= content_for(:title) || "#{@account&.name || 'Citable'} — Reserva tu cita" %></title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="theme-color" content="#1B3532">
@@ -22,9 +22,9 @@
     <header class="bg-forest px-4 py-4 sm:px-6">
       <div class="max-w-lg mx-auto flex items-center justify-between">
         <div>
-          <% if current_tenant %>
+          <% if @account %>
             <p class="font-fraunces text-xl font-light italic text-cream leading-tight">
-              <%= current_tenant.name %>
+              <%= @account.name %>
             </p>
           <% end %>
         </div>

@@ -2,35 +2,34 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["step", "stepIndicator", "nextBtn1", "summaryService", "summaryTime", "form"]
-
-  connect() {
-    this.currentStep = 1
-    this.selectedServiceName = null
+  static values = {
+    currentStep: { type: Number, default: 1 },
+    selectedServiceName: { type: String, default: "" }
   }
 
   serviceSelected(event) {
     const label = event.target.closest("label")
     const name  = label?.querySelector("p.font-semibold")?.textContent?.trim()
-    if (name) this.selectedServiceName = name
+    if (name) this.selectedServiceNameValue = name
     if (this.hasNextBtn1Target) {
       this.nextBtn1Target.disabled = false
     }
   }
 
   nextStep() {
-    if (this.currentStep < 3) {
-      this.showStep(this.currentStep + 1)
+    if (this.currentStepValue < 3) {
+      this.showStep(this.currentStepValue + 1)
     }
   }
 
   prevStep() {
-    if (this.currentStep > 1) {
-      this.showStep(this.currentStep - 1)
+    if (this.currentStepValue > 1) {
+      this.showStep(this.currentStepValue - 1)
     }
   }
 
   showStep(step) {
-    this.currentStep = step
+    this.currentStepValue = step
 
     this.stepTargets.forEach(el => {
       const idx = parseInt(el.dataset.stepIndex)
@@ -61,8 +60,8 @@ export default class extends Controller {
   }
 
   updateSummary() {
-    if (this.hasSummaryServiceTarget && this.selectedServiceName) {
-      this.summaryServiceTarget.textContent = this.selectedServiceName
+    if (this.hasSummaryServiceTarget && this.selectedServiceNameValue) {
+      this.summaryServiceTarget.textContent = this.selectedServiceNameValue
     }
 
     const dateInput = this.formTarget?.querySelector("input[type='datetime-local']")

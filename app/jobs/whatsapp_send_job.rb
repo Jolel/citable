@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class WhatsappSendJob < ApplicationJob
   queue_as :notifications
 
@@ -6,19 +8,16 @@ class WhatsappSendJob < ApplicationJob
   TWILIO_FROM        = Rails.application.credentials.dig(:twilio, :whatsapp_number)
 
   def perform(booking_id, kind)
-    booking = ActsAsTenant.without_tenant { Booking.find_by(id: booking_id) }
+    booking = Booking.find_by(id: booking_id)
     return unless booking
+    return if booking.account.whatsapp_quota_exceeded?
 
-    ActsAsTenant.with_tenant(booking.account) do
-      return if booking.account.whatsapp_quota_exceeded?
+    message_body = build_message(booking, kind)
+    to_number    = "whatsapp:#{booking.customer.phone}"
 
-      message_body = build_message(booking, kind)
-      to_number    = "whatsapp:#{booking.customer.phone}"
+    send_message(to: to_number, body: message_body, booking: booking)
 
-      send_message(to: to_number, body: message_body, booking: booking)
-
-      booking.account.increment!(:whatsapp_quota_used)
-    end
+    booking.account.increment!(:whatsapp_quota_used)
   end
 
   private

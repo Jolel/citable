@@ -191,7 +191,7 @@ Before creating credentials you must configure what users will see when they aut
 4. Name it `Citable Local`.
 5. Under **Authorized redirect URIs**, click **+ Add URI** and paste exactly:
    ```
-   http://localhost:3000/dashboard/auth/users/auth/google_oauth2/callback
+   http://localhost:3000/dashboard/google_oauth/callback
    ```
 6. Click **Create**.
 7. A popup will show your **Client ID** and **Client Secret**. Keep this window open — you'll need both values in the next step.
@@ -341,7 +341,7 @@ brew services start postgresql@16
 
 The redirect URI in Google Cloud Console doesn't match. Go back to Step 11 and make sure the Authorized redirect URI is exactly:
 ```
-http://localhost:3000/dashboard/auth/users/auth/google_oauth2/callback
+http://localhost:3000/dashboard/google_oauth/callback
 ```
 No trailing slash, no typos.
 

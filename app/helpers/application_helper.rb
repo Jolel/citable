@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ApplicationHelper
   def dashboard_nav_link(label, path, ctrl_name)
     active = controller_name == ctrl_name

@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 class Dashboard::CustomersController < Dashboard::BaseController
   before_action :set_customer, only: %i[show edit update destroy]
 
   def index
-    @customers = Customer.by_name
+    @customers = current_account.customers.by_name
     @customers = @customers.with_tag(params[:tag]) if params[:tag].present?
     @customers = @customers.where("name ILIKE ? OR phone LIKE ?", "%#{params[:q]}%", "%#{params[:q]}%") if params[:q].present?
   end
@@ -12,11 +14,11 @@ class Dashboard::CustomersController < Dashboard::BaseController
   end
 
   def new
-    @customer = Customer.new
+    @customer = current_account.customers.build
   end
 
   def create
-    @customer = Customer.new(customer_params)
+    @customer = current_account.customers.build(customer_params)
     if @customer.save
       redirect_to dashboard_customer_path(@customer), notice: "Cliente creado exitosamente."
     else
@@ -43,7 +45,7 @@ class Dashboard::CustomersController < Dashboard::BaseController
   private
 
   def set_customer
-    @customer = Customer.find(params[:id])
+    @customer = current_account.customers.find(params[:id])
   end
 
   def customer_params

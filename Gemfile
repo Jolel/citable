@@ -45,9 +45,6 @@ gem "image_processing", "~> 1.2"
 # Authentication
 gem "devise"
 
-# Multi-tenancy (row-level scoping via account_id)
-gem "acts_as_tenant"
-
 # Payments
 gem "stripe"
 
@@ -60,10 +57,12 @@ gem "resend"
 # Money/currency helpers (store prices as integer cents)
 gem "money-rails"
 
-# Google Calendar OAuth2 + API
-gem "omniauth-google-oauth2"
-gem "omniauth-rails_csrf_protection"
+# Google Calendar API + Signet OAuth2
+gem "googleauth"
 gem "google-apis-calendar_v3"
+
+# Monadic result objects (Success/Failure)
+gem "dry-monads"
 
 group :development, :test do
   gem "byebug"

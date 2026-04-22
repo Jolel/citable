@@ -14,4 +14,8 @@ export default class extends Controller {
     this.overlayTarget.classList.add("hidden")
     document.body.style.overflow = ""
   }
+
+  disconnect() {
+    document.body.style.overflow = ""
+  }
 }

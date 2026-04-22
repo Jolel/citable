@@ -84,10 +84,10 @@
 
           <div class="flex-1"></div>
 
-          <%= button_to dashboard_service_path(service), method: :delete,
-              data: { turbo_confirm: "¿Eliminar el servicio \"#{service.name}\"?" },
+          <%= button_to deactivate_dashboard_service_path(service), method: :patch,
+              data: { turbo_confirm: "¿Desactivar el servicio \"#{service.name}\"?" },
               class: "text-xs text-red-400 hover:text-red-600 transition-colors" do %>
-            Eliminar
+            Desactivar
           <% end %>
         </div>
       </div>

@@ -17,11 +17,13 @@
 - [x] Webhook controllers (Twilio inbound, Stripe payment events)
 - [x] ReminderJob with WhatsApp/email routing
 - [x] WhatsappSendJob with Twilio integration + MessageLog audit
-- [x] GoogleCalendarSyncJob (stub ready for implementation)
+- [x] GoogleCalendarSyncJob (fully implemented — create/update/cancel sync)
 - [x] Solid Queue config with named queues
-- [x] Routes (dashboard namespace, public booking, webhooks, Devise)
+- [x] Routes (dashboard namespace, public booking, webhooks, Devise, Google OAuth)
 - [x] Application timezone (Mexico City) and locale (es-MX)
 - [x] Seeds with "Ana" persona data
+- [x] Google OAuth2 + Calendar sync (11 migrations total; `Dashboard::GoogleOauthController` — manual Signet flow, no OmniAuth)
+- [x] `RenewGoogleWatchJob` — daily job renewing push channels before Google's 7-day expiry
 
 ## What Needs to Be Done
 
@@ -47,7 +49,7 @@
 - [ ] Twilio WhatsApp templates submitted to Meta
 - [ ] Stripe Mexico account + webhooks configured
 - [ ] Resend email templates for fallback reminders
-- [ ] Google OAuth2 flow for Calendar sync
+- [x] Google OAuth2 flow for Calendar sync (code complete — needs credentials + Google Cloud Project setup)
 
 ### Production Readiness
 - [ ] RSpec test suite (especially cross-tenant isolation tests)
@@ -60,10 +62,12 @@
 ## Known Issues / TODOs in Code
 
 - `WhatsappSendJob`: message templates in `build_message` are placeholders, need to match Twilio-approved templates exactly
-- `GoogleCalendarSyncJob`: `create_event`/`update_event` are stubs — need `google-api-ruby-client` gem added
 - `Public::BookingsController#find_or_create_customer`: phone uniqueness is global, should validate format before lookup
 - `Dashboard::BookingsController#schedule_reminders`: should check if `starts_at` is in the past before enqueuing
 - Devise `email` uniqueness is global (not per-tenant) — acceptable for v1, may need per-tenant email in v2
+- **Duplicate migration bug**: migrations 10 (`add_google_watch_fields_to_users`) and 11 (`add_google_token_expires_at_to_users`) both add the `google_token_expires_at` column — fresh `db:migrate` will fail on migration 11. Fix: remove the duplicate `add_column` from migration 11 or squash it.
+- Google Calendar: needs Rails encryption keys in credentials (`active_record.encryption.*`) for `encrypts :google_oauth_token` etc.
+- Google Calendar: `RenewGoogleWatchJob` uses `default_url_options[:host]` — must be configured in production env
 
 ## Phased Roadmap Alignment
 

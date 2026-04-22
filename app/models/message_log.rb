@@ -1,6 +1,6 @@
-class MessageLog < ApplicationRecord
-  acts_as_tenant :account
+# frozen_string_literal: true
 
+class MessageLog < ApplicationRecord
   CHANNELS = %w[whatsapp email].freeze
   DIRECTIONS = %w[outbound inbound].freeze
   STATUSES = %w[pending sent delivered failed].freeze

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Dashboard::SettingsController < Dashboard::BaseController
   before_action :require_owner!
 
@@ -8,7 +10,7 @@ class Dashboard::SettingsController < Dashboard::BaseController
   def update
     @account = current_account
     if @account.update(account_params)
-      redirect_to dashboard_settings_path, notice: "Configuración guardada."
+      redirect_to dashboard_settings_path, notice: "Configuraci\u00F3n guardada."
     else
       render :show, status: :unprocessable_entity
     end

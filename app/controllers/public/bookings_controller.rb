@@ -1,43 +1,41 @@
+# frozen_string_literal: true
+
 class Public::BookingsController < ApplicationController
-  before_action :require_account!
+  before_action :set_account
 
   layout "public"
 
   def new
-    @booking = Booking.new
-    @services = Service.active
+    @booking = @account.bookings.build
+    @services = @account.services.active
   end
 
   def create
     customer = find_or_create_customer
-    @booking = Booking.new(booking_params.merge(customer: customer))
+    @booking = @account.bookings.build(booking_params.merge(customer: customer))
 
     if @booking.save
       WhatsappSendJob.perform_later(@booking.id, :confirmation)
-      GoogleCalendarSyncJob.perform_later(@booking.id)
-      ReminderJob.set(wait_until: @booking.starts_at - 24.hours).perform_later(@booking.id, "24h")
-      ReminderJob.set(wait_until: @booking.starts_at - 2.hours).perform_later(@booking.id, "2h")
-      redirect_to public_booking_confirmation_path(@booking)
+      redirect_to public_booking_confirmation_path(slug: @account.subdomain, id: @booking)
     else
-      @services = Service.active
+      @services = @account.services.active
       render :new, status: :unprocessable_entity
     end
   end
 
   def confirmation
-    @booking = Booking.find(params[:id])
+    @booking = @account.bookings.find(params[:id])
   end
 
   private
 
-  def require_account!
-    unless current_tenant
-      render plain: "Negocio no encontrado", status: :not_found
-    end
+  def set_account
+    @account = Account.find_by(subdomain: params[:slug])
+    render plain: "Negocio no encontrado", status: :not_found unless @account
   end
 
   def find_or_create_customer
-    Customer.find_or_create_by!(phone: params[:customer_phone]) do |c|
+    @account.customers.find_or_create_by!(phone: params[:customer_phone]) do |c|
       c.name = params[:customer_name]
     end
   end
