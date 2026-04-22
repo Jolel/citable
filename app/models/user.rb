@@ -35,10 +35,13 @@ class User < ApplicationRecord
 
   def disconnect_google!
     update!(
-      google_oauth_token:      nil,
-      google_refresh_token:    nil,
-      google_token_expires_at: nil,
-      google_calendar_id:      nil
+      google_oauth_token:        nil,
+      google_refresh_token:      nil,
+      google_token_expires_at:   nil,
+      google_calendar_id:        nil,
+      google_channel_id:         nil,
+      google_channel_expires_at: nil,
+      google_sync_token:         nil
     )
   end
 

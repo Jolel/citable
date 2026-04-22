@@ -126,6 +126,14 @@ GEM
     docile (1.4.1)
     dotenv (3.2.0)
     drb (2.2.3)
+    dry-core (1.2.0)
+      concurrent-ruby (~> 1.0)
+      logger
+      zeitwerk (~> 2.6)
+    dry-monads (1.9.0)
+      concurrent-ruby (~> 1.0)
+      dry-core (~> 1.1)
+      zeitwerk (~> 2.6)
     ed25519 (1.4.0)
     erb (6.0.3)
     erubi (1.13.1)
@@ -508,6 +516,7 @@ DEPENDENCIES
   database_cleaner-active_record
   debug
   devise
+  dry-monads
   factory_bot_rails
   google-apis-calendar_v3
   googleauth

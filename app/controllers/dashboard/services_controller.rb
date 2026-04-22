@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Dashboard::ServicesController < Dashboard::BaseController
-  before_action :set_service, only: %i[show edit update destroy toggle_active]
+  before_action :set_service, only: %i[show edit update deactivate toggle_active]
 
   def index
     @services = current_account.services.order(:name)
@@ -34,7 +34,7 @@ class Dashboard::ServicesController < Dashboard::BaseController
     end
   end
 
-  def destroy
+  def deactivate
     @service.update!(active: false)
     redirect_to dashboard_services_path, notice: "Servicio desactivado."
   end
@@ -52,7 +52,7 @@ class Dashboard::ServicesController < Dashboard::BaseController
 
   def service_params
     params.require(:service).permit(
-      :name, :duration_minutes, :price_cents, :requires_address, :deposit_amount_cents, :active
+      :name, :duration_minutes, :price_cents, :requires_address, :deposit_amount_cents
     )
   end
 end

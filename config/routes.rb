@@ -18,9 +18,10 @@ Rails.application.routes.draw do
     end
 
     resources :customers
-    resources :services do
+    resources :services, except: :destroy do
       member do
         patch :toggle_active
+        patch :deactivate
       end
     end
 
@@ -28,7 +29,7 @@ Rails.application.routes.draw do
 
     resource :settings, only: %i[show update]
 
-    resource :google_calendar, only: [] do
+    resource :google_calendar, only: [], controller: "google_calendar" do
       delete :disconnect, on: :member
     end
 

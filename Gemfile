@@ -61,6 +61,9 @@ gem "money-rails"
 gem "googleauth"
 gem "google-apis-calendar_v3"
 
+# Monadic result objects (Success/Failure)
+gem "dry-monads"
+
 group :development, :test do
   gem "byebug"
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
