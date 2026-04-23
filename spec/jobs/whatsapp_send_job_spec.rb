@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
 require "rails_helper"
+require "infrastructure/adapters/twilio_adapter"
+require "core/use_cases/send_whatsapp_message"
 
 RSpec.describe WhatsappSendJob, type: :job do
+  include Dry::Monads[:result]
+
   before do
     allow(GoogleCalendarSyncJob).to receive(:perform_later)
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))
@@ -22,25 +26,29 @@ RSpec.describe WhatsappSendJob, type: :job do
     )
   end
 
-  let(:twilio_message_double) { double(sid: "SM123abc") }
-  let(:twilio_messages_double) { double("twilio_messages", create: twilio_message_double) }
-  let(:twilio_client_double) { double("twilio_client", messages: twilio_messages_double) }
+  let(:sent_message) do
+    Infrastructure::Adapters::TwilioAdapter::SentMessage.new(sid: "SM123abc", status: "queued")
+  end
+  let(:use_case_double) { instance_double(Core::UseCases::SendWhatsappMessage) }
 
   before do
-    allow(Twilio::REST::Client).to receive(:new).and_return(twilio_client_double)
-    allow(twilio_messages_double).to receive(:create).and_return(twilio_message_double)
+    # Stub the container lookup so the job receives our double without a real Twilio client.
+    allow(Citable::Container).to receive(:[])
+      .with("core.use_cases.send_whatsapp_message")
+      .and_return(use_case_double)
+    allow(use_case_double).to receive(:call).and_return(Success(sent_message))
   end
 
   describe "#perform" do
     context "when quota is not exceeded" do
-      it "sends a WhatsApp message via Twilio" do
+      it "calls the use case with the customer phone and message body" do
         described_class.perform_now(booking.id, :confirmation)
-        expect(twilio_messages_double).to have_received(:create).with(
-          hash_including(to: "whatsapp:+5215512345678")
+        expect(use_case_double).to have_received(:call).with(
+          hash_including(to: "+5215512345678")
         )
       end
 
-      it "creates a MessageLog record" do
+      it "creates a sent MessageLog record" do
         expect {
           described_class.perform_now(booking.id, :confirmation)
         }.to change(MessageLog, :count).by(1)
@@ -62,9 +70,9 @@ RSpec.describe WhatsappSendJob, type: :job do
     context "when quota is exceeded" do
       before { account.update!(whatsapp_quota_used: 100) }
 
-      it "does not call Twilio" do
+      it "does not call the use case" do
         described_class.perform_now(booking.id, :confirmation)
-        expect(twilio_messages_double).not_to have_received(:create)
+        expect(use_case_double).not_to have_received(:call)
       end
 
       it "does not create a MessageLog" do
@@ -80,10 +88,11 @@ RSpec.describe WhatsappSendJob, type: :job do
       end
     end
 
-    context "when Twilio raises an error" do
+    context "when the use case returns Failure (Twilio error)" do
+      let(:twilio_error) { Core::Errors::ExternalServiceError.new("Network error") }
+
       before do
-        allow(twilio_messages_double).to receive(:create)
-          .and_raise(Twilio::REST::TwilioError.new("Network error"))
+        allow(use_case_double).to receive(:call).and_return(Failure(twilio_error))
       end
 
       it "creates a failed MessageLog" do
@@ -94,10 +103,10 @@ RSpec.describe WhatsappSendJob, type: :job do
         expect(MessageLog.last.status).to eq("failed")
       end
 
-      it "re-raises the error" do
+      it "re-raises the error as ExternalServiceError" do
         expect {
           described_class.perform_now(booking.id, :confirmation)
-        }.to raise_error(Twilio::REST::TwilioError)
+        }.to raise_error(Core::Errors::ExternalServiceError)
       end
     end
 

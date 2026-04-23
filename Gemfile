@@ -64,6 +64,12 @@ gem "google-apis-calendar_v3"
 # Monadic result objects (Success/Failure)
 gem "dry-monads"
 
+# Hexagonal architecture: DI container, auto-injection, typed structs
+gem "dry-system",      "~> 1.0"
+gem "dry-auto_inject", "~> 1.0"
+gem "dry-struct",      "~> 1.4"
+gem "dry-types",       "~> 1.8"
+
 group :development, :test do
   gem "byebug"
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
