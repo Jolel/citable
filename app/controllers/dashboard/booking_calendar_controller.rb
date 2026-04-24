@@ -61,7 +61,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
                        .where(starts_at: range_start...range_end)
                        .order(:starts_at)
 
-    @bookings_by_day_and_user = @bookings.group_by { |booking| [booking.starts_at.to_date, booking.user_id] }
+    @bookings_by_day_and_user = @bookings.group_by { |booking| [ booking.starts_at.to_date, booking.user_id ] }
     @warnings_by_booking_id = compute_booking_warnings
   end
 
@@ -71,17 +71,17 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
 
     availabilities = user_ids.any? ? StaffAvailability.active
                                                        .where(user_id: user_ids, day_of_week: wdays)
-                                                       .index_by { |a| [a.user_id, a.day_of_week] } : {}
+                                                       .index_by { |a| [ a.user_id, a.day_of_week ] } : {}
 
     active_bookings_by_user = @bookings.select { |b| %w[pending confirmed].include?(b.status) }
                                        .group_by(&:user_id)
 
     @bookings.to_h do |booking|
-      availability = availabilities[[booking.user_id, booking.starts_at.wday]]
+      availability = availabilities[[ booking.user_id, booking.starts_at.wday ]]
       warnings = []
       warnings << :outside_availability if outside_availability_in_memory?(booking, availability)
       warnings << :overlap if overlap_in_memory?(booking, active_bookings_by_user[booking.user_id] || [])
-      [booking.id, warnings]
+      [ booking.id, warnings ]
     end
   end
 
@@ -121,7 +121,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   end
 
   def build_days(date, view_mode)
-    return [date] if view_mode == "day"
+    return [ date ] if view_mode == "day"
 
     start_of_week = date.beginning_of_week(:monday)
     (start_of_week..(start_of_week + 6.days)).to_a
@@ -162,7 +162,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
       customer_name: booking.customer&.name,
       day_key: booking.starts_at.to_date.iso8601,
       top_offset: minutes_from_calendar_start(booking.starts_at) * @slot_height / @slot_minutes,
-      height: [((booking.ends_at - booking.starts_at) / 60.0) * @slot_height / @slot_minutes, @slot_height].max.round,
+      height: [ ((booking.ends_at - booking.starts_at) / 60.0) * @slot_height / @slot_minutes, @slot_height ].max.round,
       warnings: warnings.map(&:to_s),
       warning_labels: calendar_warning_labels(warnings),
       warning_classes: calendar_warning_classes(warnings),
@@ -206,7 +206,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   end
 
   def bookings_for(day, user)
-    @bookings_by_day_and_user.fetch([day, user.id], [])
+    @bookings_by_day_and_user.fetch([ day, user.id ], [])
   end
 
   def warnings_for(booking)
@@ -215,7 +215,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
 
   def calendar_card_style(booking)
     top = minutes_from_calendar_start(booking.starts_at) * @slot_height / @slot_minutes
-    height = [((booking.ends_at - booking.starts_at) / 60.0) * @slot_height / @slot_minutes, @slot_height].max.round
+    height = [ ((booking.ends_at - booking.starts_at) / 60.0) * @slot_height / @slot_minutes, @slot_height ].max.round
     "top: #{top}px; height: #{height}px;"
   end
 
