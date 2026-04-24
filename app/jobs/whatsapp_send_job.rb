@@ -1,26 +1,38 @@
 # frozen_string_literal: true
 
 class WhatsappSendJob < ApplicationJob
+  include Dry::Monads[:result]
+
   queue_as :notifications
 
-  TWILIO_ACCOUNT_SID = Rails.application.credentials.dig(:twilio, :account_sid)
-  TWILIO_AUTH_TOKEN  = Rails.application.credentials.dig(:twilio, :auth_token)
-  TWILIO_FROM        = Rails.application.credentials.dig(:twilio, :whatsapp_number)
+  FROM = Rails.application.credentials.dig(:twilio, :whatsapp_number)
 
   def perform(booking_id, kind)
     booking = Booking.find_by(id: booking_id)
     return unless booking
     return if booking.account.whatsapp_quota_exceeded?
 
-    message_body = build_message(booking, kind)
-    to_number    = "whatsapp:#{booking.customer.phone}"
+    body = build_message(booking, kind)
+    to   = booking.customer.phone
 
-    send_message(to: to_number, body: message_body, booking: booking)
+    result = send_whatsapp.call(to: to, from: FROM, body: body)
 
-    booking.account.increment!(:whatsapp_quota_used)
+    case result
+    in Success[sent]
+      log_message(booking, body, "sent", sent.sid)
+      booking.account.increment!(:whatsapp_quota_used)
+    in Failure[error]
+      log_message(booking, body, "failed")
+      Rails.logger.error "[WhatsappSendJob] Twilio error for booking #{booking.id}: #{error.message}"
+      raise error
+    end
   end
 
   private
+
+  def send_whatsapp
+    Citable::Container["core.use_cases.send_whatsapp_message"]
+  end
 
   def build_message(booking, kind)
     owner_name = booking.account.name
@@ -37,36 +49,16 @@ class WhatsappSendJob < ApplicationJob
     end
   end
 
-  def send_message(to:, body:, booking:)
-    client = Twilio::REST::Client.new(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-
-    message = client.messages.create(
-      from: "whatsapp:#{TWILIO_FROM}",
-      to: to,
-      body: body
-    )
-
+  def log_message(booking, body, status, external_id = nil)
     MessageLog.create!(
-      account: booking.account,
-      booking: booking,
-      customer: booking.customer,
-      channel: "whatsapp",
-      direction: "outbound",
-      body: body,
-      status: "sent",
-      external_id: message.sid
+      account:     booking.account,
+      booking:     booking,
+      customer:    booking.customer,
+      channel:     "whatsapp",
+      direction:   "outbound",
+      body:        body,
+      status:      status,
+      external_id: external_id
     )
-  rescue Twilio::REST::TwilioError => e
-    Rails.logger.error "[WhatsappSendJob] Twilio error for booking #{booking.id}: #{e.message}"
-    MessageLog.create!(
-      account: booking.account,
-      booking: booking,
-      customer: booking.customer,
-      channel: "whatsapp",
-      direction: "outbound",
-      body: body,
-      status: "failed"
-    )
-    raise
   end
 end
