@@ -58,6 +58,7 @@
 - [ ] Sentry error monitoring
 - [ ] CI (GitHub Actions)
 - [ ] Hatchbox/Render deployment
+- [x] Dashboard booking calendar (`Day` + `Week`) with drag-and-drop rescheduling and warning states
 
 ## Known Issues / TODOs in Code
 
@@ -68,6 +69,24 @@
 - **Duplicate migration bug**: migrations 10 (`add_google_watch_fields_to_users`) and 11 (`add_google_token_expires_at_to_users`) both add the `google_token_expires_at` column — fresh `db:migrate` will fail on migration 11. Fix: remove the duplicate `add_column` from migration 11 or squash it.
 - Google Calendar: needs Rails encryption keys in credentials (`active_record.encryption.*`) for `encrypts :google_oauth_token` etc.
 - Google Calendar: `RenewGoogleWatchJob` uses `default_url_options[:host]` — must be configured in production env
+
+## Recently Specified
+
+- `docs/superpowers/specs/2026-04-23-booking-calendar-day-week-design.md` defines a native dashboard calendar for bookings with:
+  - `Lista`, `Día`, and `Semana` modes
+  - collaborator columns
+  - drag-and-drop rescheduling with immediate save
+  - warnings for overlaps and outside-availability placements
+  - explicit future seams for a month view
+
+## Recently Built
+
+- Dashboard booking calendar first pass:
+  - `GET /dashboard/calendar` renders `Día` and `Semana`
+  - `PATCH /dashboard/calendar/events/:id` updates bookings immediately from the calendar
+  - `Bookings::RescheduleFromCalendar` preserves duration while moving across times/collaborators
+  - `Bookings::CalendarPlacementWarnings` flags overlap and outside-availability states
+  - Stimulus-based drag/drop updates the booking card inline after save
 
 ## Phased Roadmap Alignment
 
