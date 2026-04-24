@@ -108,7 +108,7 @@
                   <% end %>
 
                   <% bookings_for(day, user).each do |booking| %>
-                    <% warnings = @warnings_by_booking_id.fetch(booking.id, []) %>
+                    <% warnings = warnings_for(booking) %>
                     <div
                       class="absolute inset-x-1 z-10 cursor-move overflow-hidden rounded-2xl border px-3 py-2 shadow-sm transition hover:shadow-md <%= calendar_warning_classes(warnings) %>"
                       style="<%= calendar_card_style(booking) %>"

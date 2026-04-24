@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Dashboard::BookingCalendarController < Dashboard::BaseController
-  before_action :set_calendar_context, only: %i[show events]
+  before_action :set_calendar_context, only: :show
   before_action :set_calendar_metrics, only: :update_event
 
   SLOT_MINUTES = 30
@@ -10,23 +10,10 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   helper_method :calendar_days, :calendar_staff, :calendar_slots, :bookings_for,
                 :calendar_view_mode, :calendar_date, :calendar_prev_date,
                 :calendar_next_date, :calendar_card_style, :calendar_warning_labels,
-                :calendar_warning_classes, :slot_height, :slot_minutes
+                :calendar_warning_classes, :warnings_for, :slot_height, :slot_minutes
 
   def show
     load_bookings
-  end
-
-  def events
-    load_bookings
-
-    render json: {
-      range: {
-        starts_on: calendar_days.first.to_s,
-        ends_on: calendar_days.last.to_s
-      },
-      staff: calendar_staff.map { |user| { id: user.id, name: user.display_name } },
-      bookings: @bookings.map { |booking| booking_payload(booking) }
-    }
   end
 
   def update_event
@@ -75,15 +62,50 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
                        .order(:starts_at)
 
     @bookings_by_day_and_user = @bookings.group_by { |booking| [booking.starts_at.to_date, booking.user_id] }
-    @warnings_by_booking_id = {}
-    @bookings.each do |booking|
-      @warnings_by_booking_id[booking.id] = Bookings::CalendarPlacementWarnings.call(
-        booking: booking,
-        starts_at: booking.starts_at,
-        ends_at: booking.ends_at,
-        user: booking.user
-      ).value!
+    @warnings_by_booking_id = compute_booking_warnings
+  end
+
+  def compute_booking_warnings
+    wdays = calendar_days.map(&:wday).uniq
+    user_ids = @bookings.map(&:user_id).compact.uniq
+
+    availabilities = user_ids.any? ? StaffAvailability.active
+                                                       .where(user_id: user_ids, day_of_week: wdays)
+                                                       .index_by { |a| [a.user_id, a.day_of_week] } : {}
+
+    active_bookings_by_user = @bookings.select { |b| %w[pending confirmed].include?(b.status) }
+                                       .group_by(&:user_id)
+
+    @bookings.to_h do |booking|
+      availability = availabilities[[booking.user_id, booking.starts_at.wday]]
+      warnings = []
+      warnings << :outside_availability if outside_availability_in_memory?(booking, availability)
+      warnings << :overlap if overlap_in_memory?(booking, active_bookings_by_user[booking.user_id] || [])
+      [booking.id, warnings]
     end
+  end
+
+  def outside_availability_in_memory?(booking, availability)
+    return true unless availability
+
+    day_start = booking.starts_at.in_time_zone.beginning_of_day
+    starts_seconds = (booking.starts_at - day_start).to_i
+    ends_seconds = (booking.ends_at - day_start).to_i
+
+    starts_seconds < seconds_since_midnight(availability.start_time) ||
+      ends_seconds > seconds_since_midnight(availability.end_time)
+  end
+
+  def overlap_in_memory?(booking, user_bookings)
+    user_bookings.any? do |other|
+      other.id != booking.id &&
+        other.starts_at < booking.ends_at &&
+        other.ends_at > booking.starts_at
+    end
+  end
+
+  def seconds_since_midnight(value)
+    (value.hour * 3600) + (value.min * 60) + value.sec
   end
 
   def calendar_booking_params
@@ -123,7 +145,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   end
 
   def range_end
-    calendar_days.last.in_time_zone.end_of_day + 1.second
+    (calendar_days.last + 1.day).in_time_zone.beginning_of_day
   end
 
   def booking_payload(booking, warnings = nil)
@@ -187,9 +209,14 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
     @bookings_by_day_and_user.fetch([day, user.id], [])
   end
 
+  def warnings_for(booking)
+    @warnings_by_booking_id.fetch(booking.id, [])
+  end
+
   def calendar_card_style(booking)
-    payload = booking_payload(booking)
-    "top: #{payload[:top_offset]}px; height: #{payload[:height]}px;"
+    top = minutes_from_calendar_start(booking.starts_at) * @slot_height / @slot_minutes
+    height = [((booking.ends_at - booking.starts_at) / 60.0) * @slot_height / @slot_minutes, @slot_height].max.round
+    "top: #{top}px; height: #{height}px;"
   end
 
   def calendar_warning_labels(warnings)

@@ -103,7 +103,7 @@ export default class extends Controller {
     if (infoNodes[1]) infoNodes[1].textContent = booking.service_name || infoNodes[1].textContent
     if (infoNodes[2]) infoNodes[2].textContent = booking.customer_name || infoNodes[2].textContent
 
-    card.className = card.className.replace(/border-amber-600|bg-amber-muted\/80|ring-1|ring-amber-200|border-brand\/20|bg-white/g, "").trim()
+    card.classList.remove("border-amber-600", "bg-amber-muted/80", "ring-1", "ring-amber-200", "border-brand/20", "bg-white")
     ;["absolute", "inset-x-1", "z-10", "cursor-move", "overflow-hidden", "rounded-2xl", "border", "px-3", "py-2", "shadow-sm", "transition", "hover:shadow-md"].forEach((klass) => {
       if (!card.classList.contains(klass)) card.classList.add(klass)
     })

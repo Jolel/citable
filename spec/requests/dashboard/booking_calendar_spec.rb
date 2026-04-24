@@ -51,7 +51,7 @@ RSpec.describe "Dashboard::BookingCalendar", type: :request do
   end
 
   describe "PATCH /dashboard/calendar/events/:id" do
-    it "updates the booking and returns warnings as JSON" do
+    it "updates the booking and returns JSON" do
       patch event_dashboard_calendar_path(booking),
         params: {
           booking: {
@@ -63,7 +63,21 @@ RSpec.describe "Dashboard::BookingCalendar", type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body.dig("booking", "user_id")).to eq(other_staff.id)
-      expect(response.parsed_body["warning_message"]).to eq(nil)
+      expect(response.parsed_body["warning_message"]).to be_nil
+    end
+
+    it "includes a warning message when booking falls outside staff availability" do
+      patch event_dashboard_calendar_path(booking),
+        params: {
+          booking: {
+            starts_at: "2026-04-20T19:00:00-06:00",
+            user_id: other_staff.id
+          }
+        },
+        as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["warning_message"]).to be_present
     end
   end
 end
