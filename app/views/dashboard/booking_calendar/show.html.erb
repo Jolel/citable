@@ -60,7 +60,7 @@
     <% if calendar_view_mode == "month" %>
       <div class="px-4 py-4">
         <div class="grid border-b border-l border-cream-dark bg-cream text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-forest/40" style="grid-template-columns: repeat(7, minmax(0, 1fr));">
-          <% %w[Lun Mar Mié Jue Vie Sáb Dom].each do |weekday| %>
+          <% I18n.t("date.abbr_day_names").rotate(1).map(&:capitalize).each do |weekday| %>
             <div class="border-r border-t border-cream-dark px-2 py-3"><%= weekday %></div>
           <% end %>
         </div>
@@ -112,8 +112,9 @@
                   </div>
                 <% end %>
 
-                <% if hidden_month_booking_count(day).positive? %>
-                  <%= link_to "+#{hidden_month_booking_count(day)} más", dashboard_calendar_path(view: "day", date: day),
+                <% hidden_count = [ day_bookings.size - 3, 0 ].max %>
+                <% if hidden_count.positive? %>
+                  <%= link_to "+#{hidden_count} más", dashboard_calendar_path(view: "day", date: day),
                       class: "block rounded-lg px-2 py-1 text-xs font-semibold text-brand hover:bg-brand-muted" %>
                 <% end %>
               </div>
@@ -142,6 +143,8 @@
             </div>
 
             <% calendar_days.each do |day| %>
+              <% day_bookings = bookings_for_day(day) %>
+              <% layout = timed_layout_from_bookings(day_bookings) %>
               <div
                 class="relative rounded-2xl border border-cream-dark bg-cream/50"
                 data-booking-calendar-target="column"
@@ -157,11 +160,11 @@
                   ></div>
                 <% end %>
 
-                <% bookings_for_day(day).each do |booking| %>
+                <% day_bookings.each do |booking| %>
                   <% warnings = warnings_for(booking) %>
                   <div
-                    class="absolute inset-x-1 z-10 cursor-move overflow-hidden rounded-2xl border px-3 py-2 shadow-sm transition hover:shadow-md <%= calendar_warning_classes(warnings) %>"
-                    style="<%= calendar_card_style(booking) %> <%= calendar_collaborator_style(booking.user) %>"
+                    class="absolute z-10 cursor-move overflow-hidden rounded-2xl border px-3 py-2 shadow-sm transition hover:shadow-md <%= calendar_warning_classes(warnings) %>"
+                    style="<%= calendar_card_timed_style(booking, layout) %> <%= calendar_collaborator_style(booking.user) %>"
                     draggable="true"
                     role="button"
                     tabindex="0"

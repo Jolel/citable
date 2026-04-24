@@ -120,6 +120,8 @@ export default class extends Controller {
     column.appendChild(card)
     card.style.top = `${booking.top_offset}px`
     card.style.height = `${booking.height}px`
+    card.style.left = "4px"
+    card.style.width = "calc(100% - 8px)"
     card.dataset.bookingUrl = booking.detail_url
     card.dataset.bookingUserId = booking.user_id
     card.dataset.bookingStartTime = booking.starts_at_label
@@ -131,7 +133,7 @@ export default class extends Controller {
     if (infoNodes[1]) infoNodes[1].textContent = booking.service_name || infoNodes[1].textContent
     if (infoNodes[2]) infoNodes[2].textContent = booking.customer_name || infoNodes[2].textContent
 
-    ;["absolute", "inset-x-1", "z-10", "cursor-move", "overflow-hidden", "rounded-2xl", "border", "px-3", "py-2", "shadow-sm", "transition", "hover:shadow-md"].forEach((klass) => {
+    ;["absolute", "z-10", "cursor-move", "overflow-hidden", "rounded-2xl", "border", "px-3", "py-2", "shadow-sm", "transition", "hover:shadow-md"].forEach((klass) => {
       if (!card.classList.contains(klass)) card.classList.add(klass)
     })
 

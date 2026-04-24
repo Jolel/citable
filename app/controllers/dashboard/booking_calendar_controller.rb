@@ -7,13 +7,22 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   SLOT_MINUTES = 30
   SLOT_HEIGHT = 48
 
+  COLLABORATOR_PALETTE = [
+    { background: "#EEF7F5", border: "#7BB7AE", accent: "#128C7E" },
+    { background: "#FDF3EF", border: "#E8836A", accent: "#C4522A" },
+    { background: "#FDF6E3", border: "#E8A838", accent: "#B7791F" },
+    { background: "#EFF6FF", border: "#93C5FD", accent: "#2563EB" },
+    { background: "#F5F3FF", border: "#C4B5FD", accent: "#7C3AED" },
+    { background: "#ECFDF5", border: "#86EFAC", accent: "#16A34A" }
+  ].freeze
+
   helper_method :calendar_days, :calendar_staff, :calendar_slots, :bookings_for,
                 :calendar_view_mode, :calendar_date, :calendar_prev_date,
-                :calendar_next_date, :calendar_card_style, :calendar_warning_labels,
+                :calendar_next_date, :calendar_warning_labels,
                 :calendar_warning_classes, :warnings_for, :slot_height, :slot_minutes,
                 :calendar_period_label, :bookings_for_day, :month_day_in_focus?,
-                :hidden_month_booking_count, :calendar_collaborator_style,
-                :calendar_collaborator_dot_style
+                :calendar_collaborator_style, :calendar_collaborator_dot_style,
+                :timed_layout_from_bookings, :calendar_card_timed_style
 
   def show
     load_bookings
@@ -247,18 +256,37 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
     day.month == calendar_date.month
   end
 
-  def hidden_month_booking_count(day)
-    [ bookings_for_day(day).size - 3, 0 ].max
-  end
-
   def warnings_for(booking)
     @warnings_by_booking_id.fetch(booking.id, [])
   end
 
-  def calendar_card_style(booking)
+  def timed_layout_from_bookings(bookings)
+    return {} if bookings.empty?
+
+    sorted = bookings.sort_by { |b| [ b.starts_at, b.ends_at ] }
+    col_ends = []
+    placement = {}
+
+    sorted.each do |booking|
+      col = col_ends.index { |t| t <= booking.starts_at } || col_ends.size
+      col_ends[col] = booking.ends_at
+      placement[booking.id] = col
+    end
+
+    sorted.each_with_object({}) do |booking, result|
+      concurrent = sorted.select { |o| o.starts_at < booking.ends_at && o.ends_at > booking.starts_at }
+      total = concurrent.map { |b| placement[b.id] }.max + 1
+      result[booking.id] = { col: placement[booking.id], total: }
+    end
+  end
+
+  def calendar_card_timed_style(booking, layout)
     top = minutes_from_calendar_start(booking.starts_at) * @slot_height / @slot_minutes
     height = [ ((booking.ends_at - booking.starts_at) / 60.0) * @slot_height / @slot_minutes, @slot_height ].max.round
-    "top: #{top}px; height: #{height}px;"
+    info = layout[booking.id] || { col: 0, total: 1 }
+    width_pct = (100.0 / info[:total]).round(4)
+    left_pct = (info[:col] * width_pct).round(4)
+    "top: #{top}px; height: #{height}px; left: calc(#{left_pct}% + 4px); width: calc(#{width_pct}% - 8px);"
   end
 
   def calendar_collaborator_style(user)
@@ -271,16 +299,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   end
 
   def collaborator_colors(user)
-    palette = [
-      { background: "#EEF7F5", border: "#7BB7AE", accent: "#128C7E" },
-      { background: "#FDF3EF", border: "#E8836A", accent: "#C4522A" },
-      { background: "#FDF6E3", border: "#E8A838", accent: "#B7791F" },
-      { background: "#EFF6FF", border: "#93C5FD", accent: "#2563EB" },
-      { background: "#F5F3FF", border: "#C4B5FD", accent: "#7C3AED" },
-      { background: "#ECFDF5", border: "#86EFAC", accent: "#16A34A" }
-    ]
-
-    palette[user.id % palette.size]
+    COLLABORATOR_PALETTE[user.id % COLLABORATOR_PALETTE.size]
   end
 
   def calendar_warning_labels(warnings)
