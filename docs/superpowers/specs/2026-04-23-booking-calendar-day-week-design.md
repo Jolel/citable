@@ -17,7 +17,7 @@ This feature is intended to complement, not replace, the current bookings list. 
 | Question | Decision |
 |---|---|
 | Implementation approach | Native Hotwire + Stimulus calendar, no large JS calendar dependency |
-| Initial views | `Week` and `Day` only |
+| Initial views | `Week` and `Day`, with `Month` added as the follow-up scanning view |
 | Save behavior | Immediate save on drop |
 | Staff layout | Columns by collaborator |
 | Invalid placement | Allowed, but marked with a warning |
@@ -36,7 +36,7 @@ This feature is intended to complement, not replace, the current bookings list. 
 
 ## Non-Goals
 
-- A full month view in v1
+- Time selection inside the month grid
 - Recurring booking drag-and-drop editing
 - Drag-resizing booking duration in v1
 - External calendar conflict detection against Google or other providers
@@ -78,6 +78,15 @@ Inside `Citas`, add a view switcher:
 - Focuses on one date only
 - Keeps collaborator separation
 - Becomes the preferred mobile experience because columns remain readable
+
+### Month View
+
+- Shows a Monday-first month grid with leading and trailing days from adjacent months
+- Each day cell shows compact booking pills ordered by start time
+- Cells show up to three visible bookings, followed by `+N más` linking into `Día`
+- Clicking the day number opens the `Día` view for that date
+- Dragging a booking between day cells preserves its original time, duration, and collaborator
+- Month View is for scanning and date-level rescheduling, not precise time placement
 
 ### Drag and Drop
 
@@ -375,9 +384,9 @@ The same card supports both navigation and dragging. Gesture thresholds must be 
 
 ---
 
-## Future Month View
+## Month View Extension
 
-The first version should leave these seams ready for a future `Month` view:
+The calendar now includes `Month` as a compact operational overview. It uses the same range querying, booking serialization, warning evaluation, and move endpoint as `Día` and `Semana`.
 
 ### Reusable Range Querying
 
@@ -387,15 +396,13 @@ The first version should leave these seams ready for a future `Month` view:
 
 - booking payload shape should not be tied to a vertical-grid-only UI
 
-### Additional Month Requirements
+### Month Requirements
 
 - compact per-day card rendering
 - `+N más` overflow handling inside cells
 - drag-and-drop between day cells
 - click-through from day cell to `Día`
 - performance rules for rendering large date grids
-
-Month view should be treated as a separate follow-up feature, not hidden scope inside this first implementation.
 
 ---
 

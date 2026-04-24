@@ -10,7 +10,10 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   helper_method :calendar_days, :calendar_staff, :calendar_slots, :bookings_for,
                 :calendar_view_mode, :calendar_date, :calendar_prev_date,
                 :calendar_next_date, :calendar_card_style, :calendar_warning_labels,
-                :calendar_warning_classes, :warnings_for, :slot_height, :slot_minutes
+                :calendar_warning_classes, :warnings_for, :slot_height, :slot_minutes,
+                :calendar_period_label, :bookings_for_day, :month_day_in_focus?,
+                :hidden_month_booking_count, :calendar_collaborator_style,
+                :calendar_collaborator_dot_style
 
   def show
     load_bookings
@@ -41,7 +44,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   private
 
   def set_calendar_context
-    @calendar_view_mode = %w[day week].include?(params[:view]) ? params[:view] : "week"
+    @calendar_view_mode = %w[day week month].include?(params[:view]) ? params[:view] : "week"
     @calendar_date = parse_date(params[:date]) || Time.zone.today
     @calendar_days = build_days(@calendar_date, @calendar_view_mode)
     @calendar_staff = current_account.users.order(:name)
@@ -122,9 +125,17 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
 
   def build_days(date, view_mode)
     return [ date ] if view_mode == "day"
+    return month_days(date) if view_mode == "month"
 
     start_of_week = date.beginning_of_week(:monday)
     (start_of_week..(start_of_week + 6.days)).to_a
+  end
+
+  def month_days(date)
+    first_day = date.beginning_of_month.beginning_of_week(:monday)
+    last_day = date.end_of_month.end_of_week(:monday)
+
+    (first_day..last_day).to_a
   end
 
   def build_slots
@@ -198,15 +209,46 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   def slot_minutes = @slot_minutes
 
   def calendar_prev_date
-    calendar_view_mode == "day" ? calendar_date - 1.day : calendar_date - 1.week
+    case calendar_view_mode
+    when "day" then calendar_date - 1.day
+    when "month" then calendar_date.prev_month
+    else calendar_date - 1.week
+    end
   end
 
   def calendar_next_date
-    calendar_view_mode == "day" ? calendar_date + 1.day : calendar_date + 1.week
+    case calendar_view_mode
+    when "day" then calendar_date + 1.day
+    when "month" then calendar_date.next_month
+    else calendar_date + 1.week
+    end
+  end
+
+  def calendar_period_label
+    case calendar_view_mode
+    when "day"
+      I18n.l(calendar_date, format: "%A %d de %B").capitalize
+    when "month"
+      I18n.l(calendar_date, format: "%B %Y").capitalize
+    else
+      "#{I18n.l(calendar_days.first, format: "%d %b").capitalize} - #{I18n.l(calendar_days.last, format: "%d %b").capitalize}"
+    end
   end
 
   def bookings_for(day, user)
     @bookings_by_day_and_user.fetch([ day, user.id ], [])
+  end
+
+  def bookings_for_day(day)
+    calendar_staff.flat_map { |user| bookings_for(day, user) }.sort_by(&:starts_at)
+  end
+
+  def month_day_in_focus?(day)
+    day.month == calendar_date.month
+  end
+
+  def hidden_month_booking_count(day)
+    [ bookings_for_day(day).size - 3, 0 ].max
   end
 
   def warnings_for(booking)
@@ -217,6 +259,28 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
     top = minutes_from_calendar_start(booking.starts_at) * @slot_height / @slot_minutes
     height = [ ((booking.ends_at - booking.starts_at) / 60.0) * @slot_height / @slot_minutes, @slot_height ].max.round
     "top: #{top}px; height: #{height}px;"
+  end
+
+  def calendar_collaborator_style(user)
+    colors = collaborator_colors(user)
+    "background-color: #{colors[:background]}; border-color: #{colors[:border]};"
+  end
+
+  def calendar_collaborator_dot_style(user)
+    "background-color: #{collaborator_colors(user)[:accent]};"
+  end
+
+  def collaborator_colors(user)
+    palette = [
+      { background: "#EEF7F5", border: "#7BB7AE", accent: "#128C7E" },
+      { background: "#FDF3EF", border: "#E8836A", accent: "#C4522A" },
+      { background: "#FDF6E3", border: "#E8A838", accent: "#B7791F" },
+      { background: "#EFF6FF", border: "#93C5FD", accent: "#2563EB" },
+      { background: "#F5F3FF", border: "#C4B5FD", accent: "#7C3AED" },
+      { background: "#ECFDF5", border: "#86EFAC", accent: "#16A34A" }
+    ]
+
+    palette[user.id % palette.size]
   end
 
   def calendar_warning_labels(warnings)
