@@ -7,10 +7,22 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   SLOT_MINUTES = 30
   SLOT_HEIGHT = 48
 
+  COLLABORATOR_PALETTE = [
+    { background: "#EEF7F5", border: "#7BB7AE", accent: "#128C7E" },
+    { background: "#FDF3EF", border: "#E8836A", accent: "#C4522A" },
+    { background: "#FDF6E3", border: "#E8A838", accent: "#B7791F" },
+    { background: "#EFF6FF", border: "#93C5FD", accent: "#2563EB" },
+    { background: "#F5F3FF", border: "#C4B5FD", accent: "#7C3AED" },
+    { background: "#ECFDF5", border: "#86EFAC", accent: "#16A34A" }
+  ].freeze
+
   helper_method :calendar_days, :calendar_staff, :calendar_slots, :bookings_for,
                 :calendar_view_mode, :calendar_date, :calendar_prev_date,
-                :calendar_next_date, :calendar_card_style, :calendar_warning_labels,
-                :calendar_warning_classes, :warnings_for, :slot_height, :slot_minutes
+                :calendar_next_date, :calendar_warning_labels,
+                :calendar_warning_classes, :warnings_for, :slot_height, :slot_minutes,
+                :calendar_period_label, :bookings_for_day, :month_day_in_focus?,
+                :calendar_collaborator_style, :calendar_collaborator_dot_style,
+                :timed_layout_from_bookings, :calendar_card_timed_style
 
   def show
     load_bookings
@@ -41,7 +53,7 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   private
 
   def set_calendar_context
-    @calendar_view_mode = %w[day week].include?(params[:view]) ? params[:view] : "week"
+    @calendar_view_mode = %w[day week month].include?(params[:view]) ? params[:view] : "week"
     @calendar_date = parse_date(params[:date]) || Time.zone.today
     @calendar_days = build_days(@calendar_date, @calendar_view_mode)
     @calendar_staff = current_account.users.order(:name)
@@ -122,9 +134,17 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
 
   def build_days(date, view_mode)
     return [ date ] if view_mode == "day"
+    return month_days(date) if view_mode == "month"
 
     start_of_week = date.beginning_of_week(:monday)
     (start_of_week..(start_of_week + 6.days)).to_a
+  end
+
+  def month_days(date)
+    first_day = date.beginning_of_month.beginning_of_week(:monday)
+    last_day = date.end_of_month.end_of_week(:monday)
+
+    (first_day..last_day).to_a
   end
 
   def build_slots
@@ -198,25 +218,88 @@ class Dashboard::BookingCalendarController < Dashboard::BaseController
   def slot_minutes = @slot_minutes
 
   def calendar_prev_date
-    calendar_view_mode == "day" ? calendar_date - 1.day : calendar_date - 1.week
+    case calendar_view_mode
+    when "day" then calendar_date - 1.day
+    when "month" then calendar_date.prev_month
+    else calendar_date - 1.week
+    end
   end
 
   def calendar_next_date
-    calendar_view_mode == "day" ? calendar_date + 1.day : calendar_date + 1.week
+    case calendar_view_mode
+    when "day" then calendar_date + 1.day
+    when "month" then calendar_date.next_month
+    else calendar_date + 1.week
+    end
+  end
+
+  def calendar_period_label
+    case calendar_view_mode
+    when "day"
+      I18n.l(calendar_date, format: "%A %d de %B").capitalize
+    when "month"
+      I18n.l(calendar_date, format: "%B %Y").capitalize
+    else
+      "#{I18n.l(calendar_days.first, format: "%d %b").capitalize} - #{I18n.l(calendar_days.last, format: "%d %b").capitalize}"
+    end
   end
 
   def bookings_for(day, user)
     @bookings_by_day_and_user.fetch([ day, user.id ], [])
   end
 
+  def bookings_for_day(day)
+    calendar_staff.flat_map { |user| bookings_for(day, user) }.sort_by(&:starts_at)
+  end
+
+  def month_day_in_focus?(day)
+    day.month == calendar_date.month
+  end
+
   def warnings_for(booking)
     @warnings_by_booking_id.fetch(booking.id, [])
   end
 
-  def calendar_card_style(booking)
+  def timed_layout_from_bookings(bookings)
+    return {} if bookings.empty?
+
+    sorted = bookings.sort_by { |b| [ b.starts_at, b.ends_at ] }
+    col_ends = []
+    placement = {}
+
+    sorted.each do |booking|
+      col = col_ends.index { |t| t <= booking.starts_at } || col_ends.size
+      col_ends[col] = booking.ends_at
+      placement[booking.id] = col
+    end
+
+    sorted.each_with_object({}) do |booking, result|
+      concurrent = sorted.select { |o| o.starts_at < booking.ends_at && o.ends_at > booking.starts_at }
+      total = concurrent.map { |b| placement[b.id] }.max + 1
+      result[booking.id] = { col: placement[booking.id], total: }
+    end
+  end
+
+  def calendar_card_timed_style(booking, layout)
     top = minutes_from_calendar_start(booking.starts_at) * @slot_height / @slot_minutes
     height = [ ((booking.ends_at - booking.starts_at) / 60.0) * @slot_height / @slot_minutes, @slot_height ].max.round
-    "top: #{top}px; height: #{height}px;"
+    info = layout[booking.id] || { col: 0, total: 1 }
+    width_pct = (100.0 / info[:total]).round(4)
+    left_pct = (info[:col] * width_pct).round(4)
+    "top: #{top}px; height: #{height}px; left: calc(#{left_pct}% + 4px); width: calc(#{width_pct}% - 8px);"
+  end
+
+  def calendar_collaborator_style(user)
+    colors = collaborator_colors(user)
+    "background-color: #{colors[:background]}; border-color: #{colors[:border]};"
+  end
+
+  def calendar_collaborator_dot_style(user)
+    "background-color: #{collaborator_colors(user)[:accent]};"
+  end
+
+  def collaborator_colors(user)
+    COLLABORATOR_PALETTE[user.id % COLLABORATOR_PALETTE.size]
   end
 
   def calendar_warning_labels(warnings)

@@ -36,15 +36,11 @@
 
       <div class="flex flex-wrap items-center gap-3">
         <p class="text-sm font-medium text-forest">
-          <% if calendar_view_mode == "day" %>
-            <%= I18n.l(calendar_date, format: "%A %d de %B").capitalize %>
-          <% else %>
-            <%= I18n.l(calendar_days.first, format: "%d %b").capitalize %> - <%= I18n.l(calendar_days.last, format: "%d %b").capitalize %>
-          <% end %>
+          <%= calendar_period_label %>
         </p>
 
         <div class="flex rounded-xl bg-cream-dark p-1">
-          <% [["day", "Día"], ["week", "Semana"]].each do |value, label| %>
+          <% [["day", "Día"], ["week", "Semana"], ["month", "Mes"]].each do |value, label| %>
             <% active = calendar_view_mode == value %>
             <%= link_to label, dashboard_calendar_path(view: value, date: calendar_date),
                 class: "rounded-lg px-3 py-1.5 text-sm font-medium transition #{active ? 'bg-white text-forest shadow-sm' : 'text-forest/50 hover:text-forest'}" %>
@@ -61,86 +57,146 @@
   >
     <div class="hidden border-b border-cream-dark px-5 py-3 text-sm text-amber-700" data-booking-calendar-target="toast"></div>
 
-    <div class="overflow-x-auto">
-      <div class="min-w-[58rem] px-4 py-4">
-        <% calendar_days.each do |day| %>
-          <section class="<%= 'mt-8 border-t border-cream-dark pt-8' unless day == calendar_days.first %>">
-            <div class="mb-3 flex items-end justify-between gap-4">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-forest/35"><%= I18n.l(day, format: "%A").capitalize %></p>
-                <h2 class="font-fraunces text-xl font-light text-forest"><%= I18n.l(day, format: "%d de %B").capitalize %></h2>
-              </div>
-              <p class="text-xs text-forest/40"><%= pluralize(bookings_for(day, calendar_staff.first).count + calendar_staff.drop(1).sum { |user| bookings_for(day, user).count }, "cita", "citas") %></p>
-            </div>
+    <% if calendar_view_mode == "month" %>
+      <div class="px-4 py-4">
+        <div class="grid border-b border-l border-cream-dark bg-cream text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-forest/40" style="grid-template-columns: repeat(7, minmax(0, 1fr));">
+          <% I18n.t("date.abbr_day_names").rotate(1).map(&:capitalize).each do |weekday| %>
+            <div class="border-r border-t border-cream-dark px-2 py-3"><%= weekday %></div>
+          <% end %>
+        </div>
 
-            <div class="grid gap-3" style="grid-template-columns: 4.5rem repeat(<%= calendar_staff.size %>, minmax(12rem, 1fr));">
-              <div></div>
-              <% calendar_staff.each do |user| %>
-                <div class="rounded-2xl bg-cream px-3 py-2">
-                  <p class="truncate text-sm font-semibold text-forest"><%= user.display_name %></p>
-                </div>
-              <% end %>
-
-              <div class="space-y-0">
-                <% calendar_slots.each do |slot| %>
-                  <div class="flex h-12 items-start justify-end pr-3 pt-1 text-[11px] font-medium text-forest/35">
-                    <%= slot.strftime("%H:%M") %>
-                  </div>
+        <div class="grid border-l border-cream-dark" style="grid-template-columns: repeat(7, minmax(0, 1fr));">
+          <% calendar_days.each do |day| %>
+            <% day_bookings = bookings_for_day(day) %>
+            <div
+              class="border-b border-r border-cream-dark p-2 transition <%= month_day_in_focus?(day) ? 'bg-white hover:bg-brand-muted/30' : 'bg-cream/60 text-forest/35' %>"
+              style="min-height: 9rem;"
+              data-action="dragover->booking-calendar#allowDrop drop->booking-calendar#dropOnDay"
+              data-day-date="<%= day.iso8601 %>"
+            >
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <%= link_to day.day, dashboard_calendar_path(view: "day", date: day),
+                    class: "inline-flex h-7 w-7 items-center justify-center rounded-lg text-sm font-semibold #{day == Date.current ? 'bg-brand text-white' : 'text-forest/70 hover:bg-cream-dark'}" %>
+                <% if day_bookings.any? %>
+                  <span class="text-[11px] font-medium text-forest/35"><%= day_bookings.size %></span>
                 <% end %>
               </div>
 
-              <% calendar_staff.each do |user| %>
-                <div
-                  class="relative rounded-2xl border border-cream-dark bg-cream/50"
-                  data-booking-calendar-target="column"
-                  data-column-user-id="<%= user.id %>"
-                  data-column-date="<%= day.iso8601 %>"
-                >
-                  <% calendar_slots.each do |slot| %>
-                    <% slot_time = day.in_time_zone.change(hour: slot.hour, min: slot.min) %>
-                    <div
-                      class="h-12 border-b border-dashed border-cream-dark last:border-b-0 transition hover:bg-brand-muted/40"
-                      data-action="dragover->booking-calendar#allowDrop drop->booking-calendar#dropOnSlot"
-                      data-slot-user-id="<%= user.id %>"
-                      data-slot-date="<%= day.iso8601 %>"
-                      data-slot-start-at="<%= slot_time.iso8601 %>"
-                    ></div>
-                  <% end %>
-
-                  <% bookings_for(day, user).each do |booking| %>
-                    <% warnings = warnings_for(booking) %>
-                    <div
-                      class="absolute inset-x-1 z-10 cursor-move overflow-hidden rounded-2xl border px-3 py-2 shadow-sm transition hover:shadow-md <%= calendar_warning_classes(warnings) %>"
-                      style="<%= calendar_card_style(booking) %>"
-                      draggable="true"
-                      role="button"
-                      tabindex="0"
-                      data-action="dragstart->booking-calendar#startDrag dragend->booking-calendar#endDrag click->booking-calendar#openBooking keydown.enter->booking-calendar#openBooking"
-                      data-booking-id="<%= booking.id %>"
-                      data-booking-url="<%= dashboard_booking_path(booking) %>"
-                    >
-                      <div class="flex items-start justify-between gap-2">
-                        <div class="min-w-0">
-                          <p class="text-xs font-bold uppercase tracking-[0.18em] text-forest/45"><%= booking.starts_at.strftime("%H:%M") %></p>
-                          <p class="truncate text-sm font-semibold text-forest"><%= booking.service&.name || "Servicio eliminado" %></p>
-                          <p class="truncate text-xs text-forest/55"><%= booking.customer&.name %></p>
-                        </div>
-                        <span class="mt-0.5 inline-flex h-2.5 w-2.5 shrink-0 rounded-full <%= booking.pending? ? 'bg-amber-500' : 'bg-emerald-500' %>"></span>
-                      </div>
-
-                      <div class="<%= warnings.any? ? 'mt-2 flex flex-wrap gap-1' : 'hidden mt-2 flex flex-wrap gap-1' %>" data-booking-warning-container>
-                        <% calendar_warning_labels(warnings).each do |label| %>
-                          <span class="inline-flex items-center rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-semibold text-amber-700"><%= label %></span>
-                        <% end %>
-                      </div>
+              <div class="space-y-1.5" data-day-bookings-date="<%= day.iso8601 %>">
+                <% day_bookings.first(3).each do |booking| %>
+                  <% warnings = warnings_for(booking) %>
+                  <div
+                    class="group cursor-move rounded-lg border px-2 py-1.5 shadow-sm transition hover:shadow-md <%= calendar_warning_classes(warnings) %>"
+                    draggable="true"
+                    role="button"
+                    tabindex="0"
+                    data-action="dragstart->booking-calendar#startDrag dragend->booking-calendar#endDrag click->booking-calendar#openBooking keydown.enter->booking-calendar#openBooking"
+                    data-booking-id="<%= booking.id %>"
+                    data-booking-url="<%= dashboard_booking_path(booking) %>"
+                    data-booking-user-id="<%= booking.user_id %>"
+                    data-booking-start-time="<%= booking.starts_at.strftime("%H:%M") %>"
+                    data-calendar-card-layout="month"
+                  >
+                    <div class="flex min-w-0 items-center gap-1.5">
+                      <span class="h-2 w-2 shrink-0 rounded-full <%= booking.pending? ? 'bg-amber-500' : 'bg-emerald-500' %>"></span>
+                      <p class="truncate text-[11px] font-bold text-forest"><%= booking.starts_at.strftime("%H:%M") %></p>
+                      <p class="truncate text-xs font-semibold text-forest"><%= booking.service&.name || "Servicio eliminado" %></p>
                     </div>
-                  <% end %>
+                    <p class="mt-0.5 truncate text-[11px] text-forest/50"><%= booking.customer&.name %></p>
+
+                    <div class="<%= warnings.any? ? 'mt-1 flex flex-wrap gap-1' : 'hidden mt-1 flex flex-wrap gap-1' %>" data-booking-warning-container>
+                      <% calendar_warning_labels(warnings).each do |label| %>
+                        <span class="inline-flex items-center rounded-full bg-white/85 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700"><%= label %></span>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+
+                <% hidden_count = [ day_bookings.size - 3, 0 ].max %>
+                <% if hidden_count.positive? %>
+                  <%= link_to "+#{hidden_count} más", dashboard_calendar_path(view: "day", date: day),
+                      class: "block rounded-lg px-2 py-1 text-xs font-semibold text-brand hover:bg-brand-muted" %>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% else %>
+      <div class="overflow-x-auto">
+        <div class="min-w-[58rem] px-4 py-4">
+          <div class="grid gap-3" style="grid-template-columns: 4.5rem repeat(<%= calendar_days.size %>, minmax(12rem, 1fr));">
+            <div></div>
+            <% calendar_days.each do |day| %>
+              <div class="rounded-2xl bg-cream px-3 py-2">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-forest/35"><%= I18n.l(day, format: "%a").capitalize %></p>
+                <p class="mt-0.5 text-sm font-semibold text-forest"><%= I18n.l(day, format: "%d %b").capitalize %></p>
+              </div>
+            <% end %>
+
+            <div class="space-y-0">
+              <% calendar_slots.each do |slot| %>
+                <div class="flex h-12 items-start justify-end pr-3 pt-1 text-[11px] font-medium text-forest/35">
+                  <%= slot.strftime("%H:%M") %>
                 </div>
               <% end %>
             </div>
-          </section>
-        <% end %>
+
+            <% calendar_days.each do |day| %>
+              <% day_bookings = bookings_for_day(day) %>
+              <% layout = timed_layout_from_bookings(day_bookings) %>
+              <div
+                class="relative rounded-2xl border border-cream-dark bg-cream/50"
+                data-booking-calendar-target="column"
+                data-timed-column-date="<%= day.iso8601 %>"
+              >
+                <% calendar_slots.each do |slot| %>
+                  <% slot_time = day.in_time_zone.change(hour: slot.hour, min: slot.min) %>
+                  <div
+                    class="h-12 border-b border-dashed border-cream-dark last:border-b-0 transition hover:bg-brand-muted/40"
+                    data-action="dragover->booking-calendar#allowDrop drop->booking-calendar#dropOnSlot"
+                    data-slot-date="<%= day.iso8601 %>"
+                    data-slot-start-at="<%= slot_time.iso8601 %>"
+                  ></div>
+                <% end %>
+
+                <% day_bookings.each do |booking| %>
+                  <% warnings = warnings_for(booking) %>
+                  <div
+                    class="absolute z-10 cursor-move overflow-hidden rounded-2xl border px-3 py-2 shadow-sm transition hover:shadow-md <%= calendar_warning_classes(warnings) %>"
+                    style="<%= calendar_card_timed_style(booking, layout) %> <%= calendar_collaborator_style(booking.user) %>"
+                    draggable="true"
+                    role="button"
+                    tabindex="0"
+                    data-action="dragstart->booking-calendar#startDrag dragend->booking-calendar#endDrag click->booking-calendar#openBooking keydown.enter->booking-calendar#openBooking"
+                    data-booking-id="<%= booking.id %>"
+                    data-booking-url="<%= dashboard_booking_path(booking) %>"
+                    data-booking-user-id="<%= booking.user_id %>"
+                    data-booking-start-time="<%= booking.starts_at.strftime("%H:%M") %>"
+                    data-calendar-card-layout="timed"
+                  >
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0">
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-forest/45"><%= booking.starts_at.strftime("%H:%M") %></p>
+                        <p class="truncate text-sm font-semibold text-forest"><%= booking.service&.name || "Servicio eliminado" %></p>
+                        <p class="truncate text-xs text-forest/55"><%= booking.customer&.name %></p>
+                        <p class="mt-1 truncate text-[11px] font-semibold text-forest/65"><%= booking.user.display_name %></p>
+                      </div>
+                      <span class="mt-0.5 inline-flex h-2.5 w-2.5 shrink-0 rounded-full" style="<%= calendar_collaborator_dot_style(booking.user) %>"></span>
+                    </div>
+
+                    <div class="<%= warnings.any? ? 'mt-2 flex flex-wrap gap-1' : 'hidden mt-2 flex flex-wrap gap-1' %>" data-booking-warning-container>
+                      <% calendar_warning_labels(warnings).each do |label| %>
+                        <span class="inline-flex items-center rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-semibold text-amber-700"><%= label %></span>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </div>
       </div>
-    </div>
+    <% end %>
   </div>
 </div>

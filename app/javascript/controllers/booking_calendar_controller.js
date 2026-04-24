@@ -40,10 +40,25 @@ export default class extends Controller {
     if (!bookingId) return
 
     const slot = event.currentTarget
+    const card = this.draggedCard || this.element.querySelector(`[data-booking-id="${bookingId}"]`)
+    if (!card) return
 
     this.persistMove(bookingId, {
       starts_at: slot.dataset.slotStartAt,
-      user_id: slot.dataset.slotUserId
+      user_id: card.dataset.bookingUserId
+    })
+  }
+
+  dropOnDay(event) {
+    event.preventDefault()
+
+    const bookingId = event.dataTransfer.getData("text/plain")
+    const card = this.draggedCard || this.element.querySelector(`[data-booking-id="${bookingId}"]`)
+    if (!bookingId || !card) return
+
+    this.persistMove(bookingId, {
+      starts_at: `${event.currentTarget.dataset.dayDate}T${card.dataset.bookingStartTime}:00`,
+      user_id: card.dataset.bookingUserId
     })
   }
 
@@ -88,13 +103,28 @@ export default class extends Controller {
 
   applyBookingUpdate(booking) {
     const card = this.element.querySelector(`[data-booking-id="${booking.id}"]`)
-    const column = this.findColumn(booking.user_id, booking.day_key)
-    if (!card || !column) return
+    if (!card) return
+
+    if (card.dataset.calendarCardLayout === "month") {
+      this.applyMonthBookingUpdate(card, booking)
+      return
+    }
+
+    this.applyTimedBookingUpdate(card, booking)
+  }
+
+  applyTimedBookingUpdate(card, booking) {
+    const column = this.findColumn(booking.day_key)
+    if (!column) return
 
     column.appendChild(card)
     card.style.top = `${booking.top_offset}px`
     card.style.height = `${booking.height}px`
+    card.style.left = "4px"
+    card.style.width = "calc(100% - 8px)"
     card.dataset.bookingUrl = booking.detail_url
+    card.dataset.bookingUserId = booking.user_id
+    card.dataset.bookingStartTime = booking.starts_at_label
 
     const timeNode = card.querySelector("p")
     if (timeNode) timeNode.textContent = booking.starts_at_label
@@ -103,33 +133,55 @@ export default class extends Controller {
     if (infoNodes[1]) infoNodes[1].textContent = booking.service_name || infoNodes[1].textContent
     if (infoNodes[2]) infoNodes[2].textContent = booking.customer_name || infoNodes[2].textContent
 
-    card.classList.remove("border-amber-600", "bg-amber-muted/80", "ring-1", "ring-amber-200", "border-brand/20", "bg-white")
-    ;["absolute", "inset-x-1", "z-10", "cursor-move", "overflow-hidden", "rounded-2xl", "border", "px-3", "py-2", "shadow-sm", "transition", "hover:shadow-md"].forEach((klass) => {
+    ;["absolute", "z-10", "cursor-move", "overflow-hidden", "rounded-2xl", "border", "px-3", "py-2", "shadow-sm", "transition", "hover:shadow-md"].forEach((klass) => {
       if (!card.classList.contains(klass)) card.classList.add(klass)
     })
+
+    this.applyWarningState(card, booking, "inline-flex items-center rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-semibold text-amber-700")
+  }
+
+  applyMonthBookingUpdate(card, booking) {
+    const list = this.element.querySelector(`[data-day-bookings-date="${booking.day_key}"]`)
+    if (!list) return
+
+    list.appendChild(card)
+    card.dataset.bookingUrl = booking.detail_url
+    card.dataset.bookingUserId = booking.user_id
+    card.dataset.bookingStartTime = booking.starts_at_label
+
+    const infoNodes = card.querySelectorAll("p")
+    if (infoNodes[0]) infoNodes[0].textContent = booking.starts_at_label
+    if (infoNodes[1]) infoNodes[1].textContent = booking.service_name || infoNodes[1].textContent
+    if (infoNodes[2]) infoNodes[2].textContent = booking.customer_name || infoNodes[2].textContent
+
+    this.applyWarningState(card, booking, "inline-flex items-center rounded-full bg-white/85 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700")
+  }
+
+  applyWarningState(card, booking, badgeClassName) {
+    card.classList.remove("border-amber-600", "bg-amber-muted/80", "ring-1", "ring-amber-200", "border-brand/20", "bg-white")
     booking.warning_classes.split(" ").forEach((klass) => card.classList.add(klass))
 
     const warningContainer = card.querySelector("[data-booking-warning-container]")
-    if (warningContainer) {
-      warningContainer.innerHTML = ""
+    if (!warningContainer) return
 
-      if (booking.warning_labels.length > 0) {
-        warningContainer.classList.remove("hidden")
-        booking.warning_labels.forEach((label) => {
-          const badge = document.createElement("span")
-          badge.className = "inline-flex items-center rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-          badge.textContent = label
-          warningContainer.appendChild(badge)
-        })
-      } else {
-        warningContainer.classList.add("hidden")
-      }
+    warningContainer.innerHTML = ""
+
+    if (booking.warning_labels.length > 0) {
+      warningContainer.classList.remove("hidden")
+      booking.warning_labels.forEach((label) => {
+        const badge = document.createElement("span")
+        badge.className = badgeClassName
+        badge.textContent = label
+        warningContainer.appendChild(badge)
+      })
+    } else {
+      warningContainer.classList.add("hidden")
     }
   }
 
-  findColumn(userId, dayKey) {
+  findColumn(dayKey) {
     return this.columnTargets.find((column) =>
-      column.dataset.columnUserId === String(userId) && column.dataset.columnDate === dayKey
+      column.dataset.timedColumnDate === dayKey
     )
   }
 

@@ -47,6 +47,19 @@ RSpec.describe "Dashboard::BookingCalendar", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("Semana")
       expect(response.body).to include("Rosa")
+      expect(response.body).to include(staff.display_name)
+      expect(response.body).to include("data-timed-column-date=\"2026-04-20\"")
+      expect(response.body).not_to include("data-column-user-id")
+    end
+
+    it "renders the month calendar view" do
+      get dashboard_calendar_path(view: "month", date: "2026-04-20")
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Mes")
+      expect(response.body).to include("Abril 2026")
+      expect(response.body).to include("Rosa")
+      expect(response.body).to include("grid-template-columns: repeat(7, minmax(0, 1fr));")
     end
   end
 
