@@ -10,6 +10,10 @@ Rails.application.routes.draw do
   namespace :dashboard do
     root "bookings#index"
 
+    resource :calendar, only: :show, controller: "booking_calendar" do
+      patch "events/:id", action: :update_event, as: :event, on: :collection
+    end
+
     resources :bookings do
       member do
         patch :confirm

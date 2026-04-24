@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Google OAuth2 + Calendar sync feature complete. Next phase is Twilio WhatsApp, Stripe deposits, and production readiness.
+Google OAuth2 + Calendar sync feature complete. The dashboard booking calendar is now implemented in a first pass: native Hotwire + Stimulus, `Day` + `Week` views, drag-and-drop rescheduling, immediate save, staff columns, and warnings for overlaps/out-of-hours placements. Broader next phase still includes Twilio WhatsApp, Stripe deposits, and production readiness.
 
 ## What Was Just Built (Foundation)
 
@@ -101,6 +101,12 @@ Creates: Account "Estudio de Ana" (subdomain: ana), owner user ana@example.com, 
 - **Google Calendar sync is per-staff**, not per-account. Each staff member connects their own Google account.
 - **`Booking#skip_google_sync`** attr_accessor prevents infinite loop when the webhook controller updates a booking time received from Google.
 - **Google tokens encrypted** at rest via `encrypts :google_oauth_token`, `:google_refresh_token`, `:google_sync_token` — requires `active_record.encryption.*` keys in credentials.
+- **Dashboard booking calendar v1** will be built as a native Rails + Hotwire + Stimulus experience, not a third-party embedded calendar.
+- **Booking calendar v1 scope** is `Day` + `Week` only; `Month` is intentionally deferred but the range-query/event serialization should be designed to support it later.
+- **Calendar drag-and-drop saves immediately** on drop; no confirmation modal.
+- **Calendar layout uses staff columns** so bookings can move across collaborators directly.
+- **Calendar conflicts are warnings, not blockers**: overlap and outside-availability states should persist and be surfaced clearly in the UI.
+- **Calendar implementation structure** currently uses `Dashboard::BookingCalendarController`, `Bookings::RescheduleFromCalendar`, and `Bookings::CalendarPlacementWarnings`, plus a Stimulus controller for drag/drop and inline UI updates.
 
 ## Google Calendar — Out of Scope (v1)
 
