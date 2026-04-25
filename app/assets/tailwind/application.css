@@ -1,43 +1,254 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @theme {
   /* Brand palette */
-  --color-brand:        #C4522A;
-  --color-brand-light:  #E8836A;
-  --color-brand-muted:  #FDF3EF;
-  --color-forest:       #1B3532;
-  --color-forest-deep:  #132624;
-  --color-forest-mid:   #274945;
-  --color-forest-soft:  #3A6460;
-  --color-cream:        #FAF7F2;
-  --color-cream-dark:   #F0EAE0;
-  --color-amber:        #E8A838;
-  --color-amber-muted:  #FDF6E3;
-  --color-wa:           #25D366;
-  --color-wa-dark:      #128C7E;
+  --color-brand:          #C4522A;
+  --color-brand-hover:    #A8431F;
+  --color-brand-light:    #E8836A;
+  --color-brand-muted:    #FDF3EF;
+
+  --color-forest:         #1B3532;
+  --color-forest-deep:    #132624;
+  --color-forest-mid:     #274945;
+  --color-forest-soft:    #3A6460;
+
+  --color-cream:          #FAF7F2;
+  --color-cream-dark:     #F0EAE0;
+  --color-cream-deeper:   #E6DFD2;
+
+  --color-amber:          #E8A838;
+  --color-amber-muted:    #FDF6E3;
+
+  --color-wa:             #25D366;
+  --color-wa-dark:        #128C7E;
+  --color-wa-bg:          #DCF8C6;
+
+  /* Semantic state colors */
+  --color-success:        #047857;
+  --color-success-bg:     #ECFDF5;
+  --color-success-border: #A7F3D0;
+
+  --color-danger:         #B91C1C;
+  --color-danger-bg:      #FEF2F2;
+  --color-danger-border:  #FECACA;
+
+  --color-warning:        #B45309;
+  --color-warning-bg:     #FDF6E3;
+  --color-warning-border: #FDE68A;
 
   /* Typography */
-  --font-jakarta:   "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-fraunces:  "Fraunces", ui-serif, Georgia, serif;
+  --font-jakarta:   "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-fraunces:  "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono:      ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans:      var(--font-jakarta);
+  --font-display:   var(--font-fraunces);
 }
 
-/* Base styles */
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+:root {
+  /* Semantic background aliases */
+  --bg-app:       #FAF7F2;
+  --bg-surface:   #FFFFFF;
+  --bg-sunken:    #F0EAE0;
+  --bg-sidebar:   #1B3532;
+  --bg-sidebar-2: #132624;
+  --bg-tint:      #FDF3EF;
+
+  /* Semantic foreground aliases */
+  --fg-1:         #132624;
+  --fg-2:         #1B3532;
+  --fg-3:         #78716C;
+  --fg-4:         #A8A29E;
+  --fg-on-forest: #FAF7F2;
+  --fg-on-brand:  #FFFFFF;
+
+  /* Border tokens */
+  --border-hairline: #F0EAE0;
+  --border-strong:   #D6D3D1;
+  --border-input:    #D6CFC1;
+
+  /* Type scale */
+  --text-xs:    12px;   --leading-xs:    16px;
+  --text-sm:    14px;   --leading-sm:    20px;
+  --text-base:  16px;   --leading-base:  24px;
+  --text-lg:    18px;   --leading-lg:    28px;
+  --text-xl:    20px;   --leading-xl:    28px;
+  --text-2xl:   24px;   --leading-2xl:   32px;
+  --text-3xl:   30px;   --leading-3xl:   38px;
+  --text-4xl:   36px;   --leading-4xl:   44px;
+  --text-5xl:   48px;   --leading-5xl:   56px;
+  --text-6xl:   60px;   --leading-6xl:   68px;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* Spacing (4px base) */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* Border radius */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-2xl:  24px;
+  --radius-pill: 999px;
+
+  /* Shadows — forest-tinted, paper-like */
+  --shadow-xs:       0 1px 2px rgba(27, 53, 50, 0.04);
+  --shadow-sm:       0 1px 3px rgba(27, 53, 50, 0.06), 0 1px 2px rgba(27, 53, 50, 0.04);
+  --shadow-md:       0 4px 12px rgba(27, 53, 50, 0.08), 0 2px 4px rgba(27, 53, 50, 0.04);
+  --shadow-lg:       0 12px 28px rgba(27, 53, 50, 0.12), 0 4px 10px rgba(27, 53, 50, 0.06);
+  --shadow-ring-brand: 0 0 0 4px rgba(196, 82, 42, 0.18);
+
+  /* Motion */
+  --ease-out:      cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in:       cubic-bezier(0.4, 0, 1, 1);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 280ms;
 }
 
-/* Custom scrollbar for sidebar */
+/* =========================================================================
+   Base element styles — inside @layer base so Tailwind utilities can override
+   ========================================================================= */
+@layer base {
+  html, body {
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--leading-base);
+    color: var(--fg-2);
+    background: var(--bg-app);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, .h1 {
+    font-family: var(--font-display);
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-5xl);
+    line-height: var(--leading-5xl);
+    letter-spacing: -0.01em;
+    color: var(--fg-1);
+    font-style: italic;
+  }
+  h2, .h2 {
+    font-family: var(--font-display);
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-4xl);
+    line-height: var(--leading-4xl);
+    letter-spacing: -0.005em;
+    color: var(--fg-1);
+  }
+  h3, .h3 {
+    font-family: var(--font-sans);
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-2xl);
+    line-height: var(--leading-2xl);
+    color: var(--fg-1);
+  }
+  h4, .h4 {
+    font-family: var(--font-sans);
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-lg);
+    line-height: var(--leading-lg);
+    color: var(--fg-1);
+  }
+
+  a {
+    color: #C4522A;
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-out);
+  }
+  a:hover { color: #A8431F; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--bg-sunken);
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    color: var(--fg-1);
+  }
+}
+
+/* =========================================================================
+   Typography utility classes
+   ========================================================================= */
+@layer components {
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #C4522A;
+  }
+  .display {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-6xl);
+    line-height: var(--leading-6xl);
+    letter-spacing: -0.015em;
+    color: var(--fg-1);
+  }
+  .body-lg {
+    font-size: var(--text-lg);
+    line-height: var(--leading-lg);
+    color: var(--fg-2);
+  }
+  .body-sm {
+    font-size: var(--text-sm);
+    line-height: var(--leading-sm);
+    color: var(--fg-3);
+  }
+  .caption {
+    font-size: var(--text-xs);
+    line-height: var(--leading-xs);
+    color: var(--fg-3);
+  }
+  .code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--bg-sunken);
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    color: var(--fg-1);
+  }
+}
+
+/* =========================================================================
+   Custom scrollbar for sidebar
+   ========================================================================= */
 .sidebar-scroll::-webkit-scrollbar { width: 4px; }
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 
-/* Booking status badges */
+/* =========================================================================
+   Booking status badges
+   ========================================================================= */
 .badge-pending   { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-muted text-amber-600 border border-amber-200; }
 .badge-confirmed { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200; }
 .badge-completed { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-stone-100 text-stone-500 border border-stone-200; }
 .badge-cancelled { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-brand-muted text-brand border border-red-200; }
 .badge-no-show   { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-orange-50 text-orange-600 border border-orange-200; }
 
-/* Smooth transitions */
-.sidebar-panel { transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1); }
+/* =========================================================================
+   Sidebar transition
+   ========================================================================= */
+.sidebar-panel { transition: transform var(--duration-slow) var(--ease-out); }
