@@ -4,6 +4,7 @@ FactoryBot.define do
     timezone { "America/Mexico_City" }
     locale { "es-MX" }
     plan { "free" }
+    sequence(:whatsapp_number) { |n| "1555000#{n.to_s.rjust(4, '0')}" }
     whatsapp_quota_used { 0 }
 
     trait :pro do

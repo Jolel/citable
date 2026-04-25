@@ -9,7 +9,9 @@ class Webhooks::TwilioController < ActionController::Base
   def create
     TwilioWebhook::HandleReply.call(
       from: params[:From],
-      body: params[:Body]&.strip
+      to: params[:To],
+      body: params[:Body]&.strip,
+      profile_name: params[:ProfileName]
     )
 
     head :ok
@@ -20,7 +22,7 @@ class Webhooks::TwilioController < ActionController::Base
   def verify_twilio_signature
     validator = Twilio::Security::RequestValidator.new(TWILIO_AUTH_TOKEN)
     signature = request.env["HTTP_X_TWILIO_SIGNATURE"].to_s
-    return if validator.validate(request.url, params.to_unsafe_h, signature)
+    return if validator.validate(request.url, request.request_parameters, signature)
 
     head :forbidden
   end

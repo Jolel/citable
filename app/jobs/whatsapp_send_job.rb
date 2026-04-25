@@ -1,11 +1,9 @@
 # frozen_string_literal: true
 
 class WhatsappSendJob < ApplicationJob
-  queue_as :notifications
+  include Dry::Monads[:result]
 
-  TWILIO_ACCOUNT_SID = Rails.application.credentials.dig(:twilio, :account_sid)
-  TWILIO_AUTH_TOKEN  = Rails.application.credentials.dig(:twilio, :auth_token)
-  TWILIO_FROM        = Rails.application.credentials.dig(:twilio, :whatsapp_number)
+  queue_as :notifications
 
   def perform(booking_id, kind)
     booking = Booking.find_by(id: booking_id)
@@ -13,11 +11,7 @@ class WhatsappSendJob < ApplicationJob
     return if booking.account.whatsapp_quota_exceeded?
 
     message_body = build_message(booking, kind)
-    to_number    = "whatsapp:#{booking.customer.phone}"
-
-    send_message(to: to_number, body: message_body, booking: booking)
-
-    booking.account.increment!(:whatsapp_quota_used)
+    send_message(to: booking.customer.phone, body: message_body, booking: booking)
   end
 
   private
@@ -38,35 +32,21 @@ class WhatsappSendJob < ApplicationJob
   end
 
   def send_message(to:, body:, booking:)
-    client = Twilio::REST::Client.new(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-
-    message = client.messages.create(
-      from: "whatsapp:#{TWILIO_FROM}",
+    result = Whatsapp::MessageSender.call(
+      account: booking.account,
+      booking: booking,
+      customer: booking.customer,
       to: to,
       body: body
     )
 
-    MessageLog.create!(
-      account: booking.account,
-      booking: booking,
-      customer: booking.customer,
-      channel: "whatsapp",
-      direction: "outbound",
-      body: body,
-      status: "sent",
-      external_id: message.sid
-    )
-  rescue Twilio::REST::TwilioError => e
-    Rails.logger.error "[WhatsappSendJob] Twilio error for booking #{booking.id}: #{e.message}"
-    MessageLog.create!(
-      account: booking.account,
-      booking: booking,
-      customer: booking.customer,
-      channel: "whatsapp",
-      direction: "outbound",
-      body: body,
-      status: "failed"
-    )
-    raise
+    case result
+    in Success
+      nil
+    in Failure[:quota_exceeded]
+      Rails.logger.warn "[WhatsappSendJob] Quota exceeded for account #{booking.account.id}, skipping booking #{booking.id}"
+    in Failure
+      raise "WhatsApp delivery failed for booking #{booking.id}"
+    end
   end
 end

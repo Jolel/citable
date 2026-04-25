@@ -2,23 +2,29 @@
 
 ## Current Focus
 
-Google OAuth2 + Calendar sync feature complete. The dashboard booking calendar is now implemented in a first pass: native Hotwire + Stimulus, `Day` + `Week` views, drag-and-drop rescheduling, immediate save, staff columns, and warnings for overlaps/out-of-hours placements. Broader next phase still includes Twilio WhatsApp, cash-payment polish, and production readiness.
+WhatsApp guided booking flow implemented (staged, not yet merged). Each business now has its own `whatsapp_number` on `Account`; inbound messages map the `To` field to an account and walk the customer through service → datetime → address (if needed) → confirmation. The booking calendar (`Day` + `Week` views, drag-and-drop) was completed in the previous phase.
 
-## What Was Just Built (Foundation)
+## What Was Just Built
 
-### Migrations (db/migrate/)
-11 migrations total:
-1. `create_accounts` — tenant root
-2. `devise_create_users` — auth + custom fields
-3. `create_services`
-4. `create_staff_availabilities`
-5. `create_customers` — JSONB custom_fields, text[] tags, GIN indexes
-6. `create_recurrence_rules`
-7. `create_bookings` — full state + deposit tracking
-8. `create_message_logs` — append-only audit trail
-9. `create_reminder_schedules` — unique per booking+kind
-10. `add_google_watch_fields_to_users` — adds google_token_expires_at, google_channel_id, google_channel_expires_at, google_sync_token
-11. `add_google_token_expires_at_to_users` — duplicate of column in migration 10; **bug: will fail on fresh db:migrate**
+### WhatsApp Guided Booking Flow (staged on main)
+
+#### Migration (`db/migrate/20260425001000_add_whatsapp_booking_flow.rb`)
+- Adds `accounts.whatsapp_number` (string, unique index) — used to route inbound `To` → `Account`.
+- Creates `whatsapp_conversations` table: `account_id`, `customer_id`, `service_id`, `booking_id`, `from_phone`, `step`, `requested_starts_at`, `address`, `metadata` (jsonb), timestamps.
+
+#### Models
+- `Account` — gains `whatsapp_number` with normalization (`normalize_whatsapp_number`) and uniqueness validation. Seeds set Ana's account to `14155238886` (Twilio Sandbox).
+- `WhatsappConversation` — new model; steps: `awaiting_name`, `awaiting_service`, `awaiting_datetime`, `awaiting_address`, `confirming_booking`, `completed`, `cancelled`. Expires after 30 min of inactivity (`active` + `open` scopes).
+
+#### Services
+- `TwilioWebhook::HandleReply` — rewritten. Accepts `from:`, `to:`, `body:`. Resolves account from `to`, finds customer within account, resumes or starts a conversation. Falls back to legacy confirm/cancel if customer has an active upcoming booking and no active conversation.
+- `Whatsapp::MessageSender` — new service. Checks quota, sends via Twilio REST API, creates `MessageLog` outbound record, increments `whatsapp_quota_used`. Used by `HandleReply` for all outbound conversation messages.
+
+#### Jobs
+- `WhatsappSendJob` — now delegates send to `Whatsapp::MessageSender` internally (reuses the same sender path for booking confirmation/reminder templates).
+
+### Previous Foundation (db/migrate/)
+12 migrations total (1–11 as before, plus 12 = `add_whatsapp_booking_flow`).
 
 ### Models (app/models/)
 - `Account` — validations, free/pro tier logic, quota check
@@ -86,6 +92,13 @@ Creates: Account "Estudio de Ana", owner user ana@example.com, staff maria@examp
 - Write RSpec tests, especially cross-tenant isolation tests
 
 ## Active Decisions
+
+- **Each business has its own `Account.whatsapp_number`** (normalized digits only, unique). Inbound `To` is matched against this column; unknown numbers are silently ignored (return 200).
+- **WhatsApp conversation state lives in `whatsapp_conversations`**, not in `Customer` or session. Expires after 30 min inactivity. A customer can have at most one active open conversation per account.
+- **Guided booking takes priority over legacy confirm/cancel** only if an active conversation already exists. If no conversation and customer has an active upcoming booking, legacy confirm/cancel still applies.
+- **Staff assignment is automatic** — owner first, then by name/id. No manual selection in v1.
+- **Date/time parsing is conservative** — only `YYYY-MM-DD HH:MM`, `DD/MM/YYYY HH:MM`, and `mañana HH:MM` are accepted. Unknown formats re-prompt rather than guess.
+- **`Whatsapp::MessageSender`** is the single outbound path for all WhatsApp sends (conversations + `WhatsappSendJob` templates). Quota check and `MessageLog` creation happen inside it.
 
 - **Email for `User` must be unique globally**, not just per-tenant. Devise requires this. Users can belong to one account only.
 - **`deposit_state` enum** uses prefixed values (`deposit_pending`, `deposit_paid`, `deposit_refunded`) to avoid conflict with `:pending` status enum on same model.
