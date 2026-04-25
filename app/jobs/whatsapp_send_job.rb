@@ -43,7 +43,7 @@ class WhatsappSendJob < ApplicationJob
     case result
     in Success
       nil
-    in Failure[:quota_exceeded]
+    in Failure[ :quota_exceeded ]
       Rails.logger.warn "[WhatsappSendJob] Quota exceeded for account #{booking.account.id}, skipping booking #{booking.id}"
     in Failure
       raise "WhatsApp delivery failed for booking #{booking.id}"
