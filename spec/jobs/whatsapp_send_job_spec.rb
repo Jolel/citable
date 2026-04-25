@@ -27,6 +27,9 @@ RSpec.describe WhatsappSendJob, type: :job do
   let(:twilio_client_double) { double("twilio_client", messages: twilio_messages_double) }
 
   before do
+    allow(Rails.application.credentials).to receive(:dig).with(:twilio, :account_sid).and_return("AC_TEST")
+    allow(Rails.application.credentials).to receive(:dig).with(:twilio, :auth_token).and_return("AUTH_TEST")
+    allow(Rails.application.credentials).to receive(:dig).with(:twilio, :whatsapp_number).and_return("14155238886")
     allow(Twilio::REST::Client).to receive(:new).and_return(twilio_client_double)
     allow(twilio_messages_double).to receive(:create).and_return(twilio_message_double)
   end
@@ -94,10 +97,10 @@ RSpec.describe WhatsappSendJob, type: :job do
         expect(MessageLog.last.status).to eq("failed")
       end
 
-      it "re-raises the error" do
+      it "re-raises as a generic error for Solid Queue retry" do
         expect {
           described_class.perform_now(booking.id, :confirmation)
-        }.to raise_error(Twilio::REST::TwilioError)
+        }.to raise_error(RuntimeError, /WhatsApp delivery failed/)
       end
     end
 

@@ -2,10 +2,11 @@ puts "Seeding development data..."
 
 # Create a sample account (the "Ana" persona)
 account = Account.find_or_create_by!(name: "Estudio de Ana") do |a|
-  a.name     = "Estudio de Ana"
-  a.timezone = "America/Mexico_City"
-  a.locale   = "es-MX"
-  a.plan     = "free"
+  a.name             = "Estudio de Ana"
+  a.timezone         = "America/Mexico_City"
+  a.locale           = "es-MX"
+  a.plan             = "free"
+  a.whatsapp_number  = "14155238886"  # Twilio WhatsApp Sandbox sender number (without whatsapp: prefix)
 end
 puts "Account: #{account.name}"
 

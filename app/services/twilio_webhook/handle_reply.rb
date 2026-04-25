@@ -6,17 +6,33 @@ module TwilioWebhook
 
     def self.call(...) = new.call(...)
 
-    def call(from:, body:)
-      customer = find_customer(from)
-      return Success(:customer_not_found) unless customer
+    def call(from:, to:, body:, profile_name: nil)
+      @body = body.to_s.strip
+      @from_phone = Account.normalize_whatsapp_number(from)
+      @account = Account.find_by(whatsapp_number: Account.normalize_whatsapp_number(to))
+      return Success(:account_not_found) unless account
 
-      booking = customer.bookings.active.upcoming.first
-      return Success(:no_upcoming_booking) unless booking
+      @customer = find_customer
+      conversation = active_conversation
 
-      log_inbound(customer, booking, body)
-      process_reply(booking, body)
+      if conversation
+        log_inbound(customer: conversation.customer)
+        return AdvanceConversation.call(conversation: conversation, body: @body, account: account, from_phone: from_phone)
+      end
 
-      Success(booking)
+      if customer
+        booking = customer.bookings.active.upcoming.first
+        if booking
+          log_inbound(customer: customer, booking: booking)
+          return ProcessBookingReply.call(booking: booking, body: @body)
+        end
+      end
+
+      log_inbound(customer: customer)
+      StartConversation.call(account: account, from_phone: from_phone, customer: customer, profile_name: profile_name.presence)
+    rescue ActiveRecord::RecordInvalid => e
+      Rails.logger.error "[TwilioWebhook::HandleReply] #{e.message}"
+      Failure(:record_invalid)
     rescue StandardError => e
       Rails.logger.error "[TwilioWebhook::HandleReply] Error processing reply from #{from}: #{e.message}"
       Failure(:processing_error)
@@ -24,28 +40,26 @@ module TwilioWebhook
 
     private
 
-    def find_customer(from)
-      digits = from.gsub(/\D/, "").last(10)
-      Customer.find_by("phone LIKE ?", "%#{digits}%")
+    attr_reader :account, :body, :customer, :from_phone
+
+    def active_conversation
+      account.whatsapp_conversations.active.open.find_by(from_phone: from_phone)
     end
 
-    def log_inbound(customer, booking, body)
+    def find_customer
+      account.customers.find_by("regexp_replace(phone, '[^0-9]', '', 'g') = ?", from_phone)
+    end
+
+    def log_inbound(customer: nil, booking: nil)
       MessageLog.create!(
-        account:   customer.account,
-        customer:  customer,
-        booking:   booking,
-        channel:   "whatsapp",
+        account: account,
+        customer: customer,
+        booking: booking,
+        channel: "whatsapp",
         direction: "inbound",
-        body:      body,
-        status:    "delivered"
+        body: body,
+        status: "delivered"
       )
-    end
-
-    def process_reply(booking, body)
-      case body
-      when "1" then booking.confirm!
-      when "2" then booking.cancel!
-      end
     end
   end
 end

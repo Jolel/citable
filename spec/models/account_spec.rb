@@ -11,6 +11,7 @@ RSpec.describe Account, type: :model do
     it { is_expected.to have_many(:recurrence_rules).dependent(:destroy) }
     it { is_expected.to have_many(:message_logs).dependent(:destroy) }
     it { is_expected.to have_many(:reminder_schedules).dependent(:destroy) }
+    it { is_expected.to have_many(:whatsapp_conversations).dependent(:destroy) }
   end
 
   describe "validations" do
@@ -20,6 +21,22 @@ RSpec.describe Account, type: :model do
     it { is_expected.to validate_presence_of(:timezone) }
     it { is_expected.to validate_presence_of(:locale) }
     it { is_expected.to validate_numericality_of(:whatsapp_quota_used).is_greater_than_or_equal_to(0) }
+
+    it "normalizes whatsapp number before validation" do
+      account = build(:account, whatsapp_number: "whatsapp:+52 (55) 1234-5678")
+
+      account.valid?
+
+      expect(account.whatsapp_number).to eq("525512345678")
+    end
+
+    it "requires unique whatsapp numbers when present" do
+      create(:account, whatsapp_number: "whatsapp:+5215512345678")
+      account = build(:account, whatsapp_number: "+52 1 55 1234 5678")
+
+      expect(account).not_to be_valid
+      expect(account.errors[:whatsapp_number]).not_to be_empty
+    end
 
     it "validates plan is in allowed values" do
       account = build(:account, plan: "enterprise")

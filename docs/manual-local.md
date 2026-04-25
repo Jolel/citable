@@ -268,6 +268,8 @@ Expected result:
 
 ## 8. Test Twilio WhatsApp
 
+### Outbound confirmation (from the public booking page)
+
 When a public booking is created, `Public::BookingsController` enqueues:
 
 ```ruby
@@ -281,19 +283,37 @@ To test outbound WhatsApp:
 3. Create a public booking at `http://localhost:3000/reservar`.
 4. Use the joined Sandbox phone number as the customer WhatsApp number, in E.164 format, for example `+5215511111111`.
 
-To test inbound WhatsApp replies:
+### Inbound guided booking flow
+
+The app now supports a full guided booking flow over WhatsApp. When a customer messages the business WhatsApp number, the app walks them through:
+
+1. **Name** — collected once for new customers.
+2. **Service selection** — numbered list of active services.
+3. **Date and time** — customer enters free text in formats like `2026-04-26 15:00`, `26/04/2026 15:00`, or `mañana 15:00`.
+4. **Address** — only asked if the selected service requires it.
+5. **Confirmation** — customer replies `1` to confirm or `2` to cancel.
+
+The seed data sets "Estudio de Ana" `whatsapp_number` to `14155238886` (the Twilio Sandbox sender). The inbound webhook matches the `To` field of each message to an account by that number. If no account matches, the request is silently ignored.
+
+To test the guided booking flow:
 
 1. Keep `bin/dev` running.
 2. Keep `ngrok http 3000` running.
 3. Confirm the Twilio Sandbox **When a message comes in** URL points to `https://YOUR-NGROK-HOST/webhooks/twilio`.
-4. From the joined WhatsApp test phone, reply to the Sandbox sender:
-   - `1` confirms the active booking.
-   - `2` cancels the active booking.
+4. From the joined WhatsApp test phone, send any message to the Sandbox number.
+5. Follow the prompts to select a service, enter a date/time, and confirm.
 
 Expected result:
 
 - Twilio sends a signed webhook to the local app through ngrok.
-- `TwilioWebhook::HandleReply` finds the customer by phone number.
+- `TwilioWebhook::HandleReply` resolves the account from `To`, finds or creates the customer from `From`, and advances the conversation step by step.
+- After confirmation (`1`), a booking is created with status `pending` and assigned to the first available staff member.
+- At each step, the app replies with the next prompt via `Whatsapp::MessageSender`.
+
+### Existing confirm/cancel flow
+
+Customers with an active upcoming booking who message the Sandbox number still get the legacy confirm/cancel flow — the guided booking flow only starts if there is no active upcoming booking for that customer.
+
 - Reply `1` changes the booking status to `confirmed`.
 - Reply `2` changes the booking status to `cancelled`.
 

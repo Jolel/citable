@@ -10,7 +10,7 @@ RSpec.describe "Webhooks::Twilio", type: :request do
       .to receive(:validate).and_return(true)
   end
 
-  let(:account) { create(:account) }
+  let(:account) { create(:account, whatsapp_number: "whatsapp:+15551230000") }
   let(:user) { create(:user, account: account) }
   let(:service) { create(:service, account: account) }
   let(:customer) { create(:customer, account: account, phone: "+5215512345678") }
@@ -19,8 +19,8 @@ RSpec.describe "Webhooks::Twilio", type: :request do
            starts_at: 2.days.from_now, status: "pending")
   end
 
-  def post_twilio(from:, body:)
-    post webhooks_twilio_path, params: { From: from, Body: body }
+  def post_twilio(from:, body:, to: "whatsapp:+15551230000")
+    post webhooks_twilio_path, params: { From: from, To: to, Body: body }
   end
 
   describe "POST /webhooks/twilio" do
@@ -93,10 +93,10 @@ RSpec.describe "Webhooks::Twilio", type: :request do
     end
 
     context "when phone number is not recognized" do
-      it "does nothing and returns 200" do
+      it "starts a booking conversation and returns 200" do
         expect {
           post_twilio(from: "whatsapp:+19990000000", body: "1")
-        }.not_to change(MessageLog, :count)
+        }.to change(WhatsappConversation, :count).by(1)
         expect(response).to have_http_status(:ok)
       end
     end
@@ -104,10 +104,59 @@ RSpec.describe "Webhooks::Twilio", type: :request do
     context "when customer has no upcoming active booking" do
       before { booking.update_columns(starts_at: 2.days.ago, ends_at: 1.day.ago) }
 
-      it "does not create a log or change booking status" do
+      it "starts a booking conversation" do
         expect {
           post_twilio(from: "whatsapp:+5215512345678", body: "1")
+        }.to change(WhatsappConversation, :count).by(1)
+      end
+    end
+
+    context "when business phone number is unknown" do
+      it "returns 200 without creating records" do
+        expect {
+          post_twilio(from: "whatsapp:+5215512345678", to: "whatsapp:+15550000000", body: "hola")
         }.not_to change(MessageLog, :count)
+
+        expect(response).to have_http_status(:ok)
+      end
+    end
+
+    context "guided booking flow" do
+      let!(:owner) { create(:user, :owner, account: account, name: "Owner") }
+
+      it "creates a booking for a new customer" do
+        expect {
+          post_twilio(from: "whatsapp:+5215599999999", body: "hola")
+          post_twilio(from: "whatsapp:+5215599999999", body: "Rosa Martinez")
+          post_twilio(from: "whatsapp:+5215599999999", body: "1")
+          post_twilio(from: "whatsapp:+5215599999999", body: "2026-04-26 15:00")
+          post_twilio(from: "whatsapp:+5215599999999", body: "1")
+        }.to change(Customer, :count).by(1)
+         .and change(Booking, :count).by(1)
+
+        expect(account.bookings.order(:created_at).last.user).to eq(owner)
+        expect(response).to have_http_status(:ok)
+      end
+
+      it "keeps identical customer phones scoped by business" do
+        other_account = create(:account, whatsapp_number: "whatsapp:+15559990000")
+        create(:user, :owner, account: other_account)
+        create(:service, account: other_account)
+
+        post_twilio(from: "whatsapp:+5215599999999", body: "hola")
+        post_twilio(from: "whatsapp:+5215599999999", body: "Rosa One")
+        post_twilio(from: "whatsapp:+5215599999999", body: "1")
+        post_twilio(from: "whatsapp:+5215599999999", body: "2026-04-26 15:00")
+        post_twilio(from: "whatsapp:+5215599999999", body: "1")
+
+        post_twilio(from: "whatsapp:+5215599999999", to: "whatsapp:+15559990000", body: "hola")
+        post_twilio(from: "whatsapp:+5215599999999", to: "whatsapp:+15559990000", body: "Rosa Two")
+        post_twilio(from: "whatsapp:+5215599999999", to: "whatsapp:+15559990000", body: "1")
+        post_twilio(from: "whatsapp:+5215599999999", to: "whatsapp:+15559990000", body: "2026-04-27 15:00")
+        post_twilio(from: "whatsapp:+5215599999999", to: "whatsapp:+15559990000", body: "1")
+
+        expect(account.customers.find_by!(phone: "5215599999999").name).to eq("Rosa One")
+        expect(other_account.customers.find_by!(phone: "5215599999999").name).to eq("Rosa Two")
       end
     end
   end

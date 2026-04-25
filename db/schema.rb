@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_25_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_25_001000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -21,7 +21,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_000000) do
     t.string "plan", default: "free", null: false
     t.string "timezone", default: "America/Mexico_City", null: false
     t.datetime "updated_at", null: false
+    t.string "whatsapp_number"
     t.integer "whatsapp_quota_used", default: 0, null: false
+    t.index ["whatsapp_number"], name: "index_accounts_on_whatsapp_number", unique: true
   end
 
   create_table "bookings", force: :cascade do |t|
@@ -163,6 +165,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_000000) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  create_table "whatsapp_conversations", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "address"
+    t.bigint "booking_id"
+    t.datetime "created_at", null: false
+    t.bigint "customer_id"
+    t.string "from_phone", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "requested_starts_at"
+    t.bigint "service_id"
+    t.string "step", default: "awaiting_name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "from_phone", "step"], name: "idx_on_account_id_from_phone_step_7196595893"
+    t.index ["account_id"], name: "index_whatsapp_conversations_on_account_id"
+    t.index ["booking_id"], name: "index_whatsapp_conversations_on_booking_id"
+    t.index ["customer_id"], name: "index_whatsapp_conversations_on_customer_id"
+    t.index ["service_id"], name: "index_whatsapp_conversations_on_service_id"
+    t.index ["updated_at"], name: "index_whatsapp_conversations_on_updated_at"
+  end
+
   add_foreign_key "bookings", "accounts"
   add_foreign_key "bookings", "customers"
   add_foreign_key "bookings", "recurrence_rules"
@@ -179,4 +201,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_000000) do
   add_foreign_key "staff_availabilities", "accounts"
   add_foreign_key "staff_availabilities", "users"
   add_foreign_key "users", "accounts"
+  add_foreign_key "whatsapp_conversations", "accounts"
+  add_foreign_key "whatsapp_conversations", "bookings"
+  add_foreign_key "whatsapp_conversations", "customers"
+  add_foreign_key "whatsapp_conversations", "services"
 end

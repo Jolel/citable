@@ -16,7 +16,8 @@
 - [x] Public booking controller
 - [x] Webhook controllers (Twilio inbound)
 - [x] ReminderJob with WhatsApp/email routing
-- [x] WhatsappSendJob with Twilio integration + MessageLog audit
+- [x] WhatsappSendJob with Twilio integration + MessageLog audit (now delegates send to `Whatsapp::MessageSender`)
+- [x] WhatsApp guided booking flow: `Account.whatsapp_number`, `WhatsappConversation` model, rewritten `TwilioWebhook::HandleReply`, new `Whatsapp::MessageSender` service
 - [x] GoogleCalendarSyncJob (fully implemented — create/update/cancel sync)
 - [x] Solid Queue config with named queues
 - [x] Routes (dashboard namespace, public booking, webhooks, Devise, Google OAuth)
@@ -28,8 +29,8 @@
 ## What Needs to Be Done
 
 ### Before the app can boot
-- [ ] Run `rails db:create db:migrate db:seed` in terminal
-- [ ] Run `rails generate devise:views` for auth pages
+- [ ] Run `bin/rails db:migrate db:seed` (or `bin/setup --skip-server` on a fresh clone)
+- [ ] Run `rails generate devise:views` for auth pages if views are missing
 
 ### UI (completed)
 - [x] `app/views/layouts/application.html.erb` — Tailwind v4 theme, Google Fonts (Fraunces + Plus Jakarta Sans)
@@ -79,6 +80,13 @@
   - explicit future seams for a month view
 
 ## Recently Built
+
+- WhatsApp guided booking flow (staged on main, 2026-04-25):
+  - `Account.whatsapp_number` — unique column; seeds set Ana's account to `14155238886`
+  - `WhatsappConversation` model — guided steps, 30-min expiry, `active`/`open` scopes
+  - `TwilioWebhook::HandleReply` — rewritten to resolve account from `To`, route to conversation or legacy confirm/cancel
+  - `Whatsapp::MessageSender` — centralized outbound sender (quota check, Twilio API, MessageLog)
+  - `WhatsappSendJob` — now uses `MessageSender` internally
 
 - Dashboard booking calendar first pass:
   - `GET /dashboard/calendar` renders `Día` and `Semana`
