@@ -9,7 +9,7 @@ Calendly/Acuity don't integrate with WhatsApp and are English-first. Jobber is U
 ## How It Should Work
 
 ### For the Business Owner (Ana)
-1. Signs up in < 5 minutes → gets `ana.citable.mx` immediately
+1. Signs up in < 5 minutes → gets a public booking page immediately
 2. Adds her services (Corte $250, Tinte $850 con depósito $200)
 3. Sets her availability (Lun-Sáb 9am-6pm)
 4. Shares her booking link on Instagram Stories / WhatsApp

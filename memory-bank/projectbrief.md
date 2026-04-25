@@ -8,7 +8,7 @@ Mexican solo operators (plomeros, estilistas, paseadores de perros, tutores, té
 
 ## Solution
 A SaaS app that:
-- Gives each business a mobile-first public booking page (subdomain or custom domain)
+- Gives each business a mobile-first public booking page
 - Sends WhatsApp confirmations and reminders automatically (Twilio)
 - Lets clients confirm or cancel by replying "1" or "2" on WhatsApp
 - Stores all customers, bookings, and notes in one place

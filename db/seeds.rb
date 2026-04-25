@@ -1,13 +1,13 @@
 puts "Seeding development data..."
 
 # Create a sample account (the "Ana" persona)
-account = Account.find_or_create_by!(subdomain: "ana") do |a|
+account = Account.find_or_create_by!(name: "Estudio de Ana") do |a|
   a.name     = "Estudio de Ana"
   a.timezone = "America/Mexico_City"
   a.locale   = "es-MX"
   a.plan     = "free"
 end
-puts "Account: #{account.name} (subdomain: #{account.subdomain})"
+puts "Account: #{account.name}"
 
 # Owner user
 owner = User.find_or_create_by!(email: "ana@example.com") do |u|
@@ -89,4 +89,4 @@ booking = account.bookings.find_or_create_by!(customer: rosa, service: corte, st
 end
 puts "Booking: #{rosa.name} - #{corte.name} at #{booking.starts_at}"
 
-puts "Done! Visit http://localhost:3000/reservar/ana or sign in at http://localhost:3000/dashboard/auth/entrar as ana@example.com / password123"
+puts "Done! Visit http://localhost:3000/reservar or sign in at http://localhost:3000/dashboard/auth/entrar as ana@example.com / password123"

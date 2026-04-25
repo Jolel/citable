@@ -63,7 +63,7 @@ Acceptance criteria:
 
 - Sign-up requires only: email, business name, WhatsApp phone, password. No credit card.
 - Onboarding wizard in Spanish walks through: add first service (name, duration, price), set weekly availability, preview booking page.
-- Booking page is live at `[subdomain].citable.mx` immediately after wizard completion.
+- Booking page is live at a shareable `/reservar` URL immediately after wizard completion.
 - Median time from sign-up start to live booking page <= 5 minutes in usability testing with 5 Spanish-speaking non-technical users.
 - User sees a "Copia el link de tu página" button at the end of onboarding.
 
@@ -204,7 +204,7 @@ No LLM features in MVP. WhatsApp reply parsing uses simple keyword matching (`1`
 
 Rails 8.1+ monolithic application with Hotwire for reactive UI. Postgres 15+ for primary data. Solid Queue for background jobs (reminders, calendar sync, webhook retries). No separate frontend; Hotwire (Turbo Frames + Turbo Streams + Stimulus) handles interactivity.
 
-Multi-tenant via row-level scoping with `acts_as_tenant` on `account_id`. Subdomain routing resolves tenant middleware before any controller action. Public booking pages resolve tenancy via subdomain and are NOT behind auth - customers book without signing in. The `require_tenant!` global setting applies only to authenticated dashboard routes; public routes explicitly set the current tenant via subdomain lookup and skip the auth filter.
+Tenant data is associated through `account_id`. Authenticated dashboard requests use the signed-in user's account. Public booking pages are not behind auth; they use the configured public booking account so customers can book without signing in.
 
 Background jobs are the critical path for reliability:
 

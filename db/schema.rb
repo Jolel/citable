@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_24_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_25_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -19,11 +19,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_24_000000) do
     t.string "locale", default: "es-MX", null: false
     t.string "name", null: false
     t.string "plan", default: "free", null: false
-    t.string "subdomain", null: false
     t.string "timezone", default: "America/Mexico_City", null: false
     t.datetime "updated_at", null: false
     t.integer "whatsapp_quota_used", default: 0, null: false
-    t.index ["subdomain"], name: "index_accounts_on_subdomain", unique: true
   end
 
   create_table "bookings", force: :cascade do |t|

@@ -373,12 +373,12 @@ Before this feature can work in any environment:
 2. Enable **Google Calendar API**
 3. Create **OAuth 2.0 Client ID** (type: Web Application)
 4. Add authorized redirect URIs:
-   - `http://ana.localhost:3000/dashboard/google_oauth/callback` (development)
-   - `https://*.citable.mx/dashboard/google_oauth/callback` (production, wildcard not supported — add per-subdomain or use a fixed domain)
+   - `http://localhost:3000/dashboard/google_oauth/callback` (development)
+   - `https://app.citable.mx/dashboard/google_oauth/callback` (production)
 5. Add `client_id` + `client_secret` to Rails credentials
 6. Generate a random `webhook_token` (`SecureRandom.hex(32)`) and add to credentials
 
-**Note on production redirect URIs:** Since the app is subdomain-based, the OAuth callback must use a fixed domain (e.g., `https://app.citable.mx/dashboard/google_oauth/callback`) and the OAuth controller resolves the tenant from the session — not the subdomain — during the callback. This is a subtle but important implementation detail.
+**Note on production redirect URIs:** Keep the OAuth callback on the canonical app host, for example `https://app.citable.mx/dashboard/google_oauth/callback`.
 
 ---
 

@@ -19,13 +19,13 @@ After significant decisions or completed features, update the relevant memory ba
 
 ## What This App Is
 
-Citable is a WhatsApp-based appointment booking SaaS for Mexican service businesses (salons, etc.). Businesses get a subdomain (e.g., `ana.citable.mx`), define services and staff schedules, and customers book via a public `/reservar` page. The system sends WhatsApp confirmations and reminders via Twilio. Customers reply "1" to confirm or "2" to cancel. Free accounts get 100 WhatsApp messages/month; Pro gets 1000.
+Citable is a WhatsApp-based appointment booking SaaS for Mexican service businesses (salons, etc.). Businesses define services and staff schedules, and customers book via a public `/reservar` page. The system sends WhatsApp confirmations and reminders via Twilio. Customers reply "1" to confirm or "2" to cancel. Free accounts get 100 WhatsApp messages/month; Pro gets 1000.
 
 ## Tech Stack
 
 - **Rails 8.1.3**, Ruby 3.3.6, PostgreSQL
 - **Frontend**: Hotwire (Turbo + Stimulus), Tailwind CSS, Importmap (no Node)
-- **Auth**: Devise (users), acts_as_tenant (multi-tenancy by subdomain)
+- **Auth**: Devise (users)
 - **Background jobs**: Solid Queue (runs inside Puma)
 - **External services**: Twilio (WhatsApp), Resend (email fallback)
 - **Money**: money-rails, default currency MXN, stored as integer cents
@@ -53,12 +53,12 @@ CI runs: Brakeman → bundler-audit → importmap audit → Rubocop → RSpec wi
 
 ### Multi-tenancy
 
-`ApplicationController` resolves the tenant from the subdomain via `acts_as_tenant`. All models with tenant scope (`Account`) automatically filter queries. `Dashboard::BaseController` enforces both authentication (Devise) and tenant presence.
+Authenticated dashboard requests use `current_user.account` as the account boundary. `Dashboard::BaseController` enforces authentication through Devise.
 
 ### Two Namespaces
 
 - **`/dashboard/*`** — Authenticated owner/staff interface (nested under `Dashboard::` controllers)
-- **`/reservar`** — Public customer booking form (Spanish URL, `Public::BookingsController`), scoped to the subdomain's account
+- **`/reservar`** — Public customer booking form (Spanish URL, `Public::BookingsController`)
 
 ### Webhooks (no CSRF / no auth)
 
@@ -74,7 +74,7 @@ CI runs: Brakeman → bundler-audit → importmap audit → Rubocop → RSpec wi
 
 | Model | Role |
 |---|---|
-| `Account` | SaaS tenant root — subdomains, plan, WhatsApp quota |
+| `Account` | Business account root — plan, WhatsApp quota |
 | `User` | Owner or staff; Devise auth; holds Google OAuth tokens |
 | `Booking` | Core entity; statuses: `pending / confirmed / cancelled / completed / no_show` |
 | `Customer` | Client contact with phone, tags, custom fields |

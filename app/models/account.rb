@@ -12,14 +12,10 @@ class Account < ApplicationRecord
   has_many :reminder_schedules, dependent: :destroy
 
   validates :name, presence: true
-  validates :subdomain, presence: true, uniqueness: { case_sensitive: false },
-                        format: { with: /\A[a-z0-9\-]+\z/, message: "solo letras minúsculas, números y guiones" }
   validates :timezone, presence: true
   validates :locale, presence: true
   validates :plan, inclusion: { in: PLANS }
   validates :whatsapp_quota_used, numericality: { greater_than_or_equal_to: 0 }
-
-  before_validation :downcase_subdomain
 
   WHATSAPP_QUOTA = { "free" => 100, "pro" => 1000 }.freeze
 
@@ -37,11 +33,5 @@ class Account < ApplicationRecord
 
   def pro?
     plan == "pro"
-  end
-
-  private
-
-  def downcase_subdomain
-    self.subdomain = subdomain&.downcase&.strip
   end
 end

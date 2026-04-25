@@ -1,7 +1,6 @@
 FactoryBot.define do
   factory :account do
     sequence(:name) { |n| "Business #{n}" }
-    sequence(:subdomain) { |n| "business#{n}" }
     timezone { "America/Mexico_City" }
     locale { "es-MX" }
     plan { "free" }

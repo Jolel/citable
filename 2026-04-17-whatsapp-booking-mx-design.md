@@ -81,7 +81,7 @@ flowchart TD
 
 ### Components
 
-- **Public booking page** - subdomain per tenant (`ana.citable.mx`) + custom path; Spanish-only; mobile-first. Renders available slots, service picker, and cash deposit expectations.
+- **Public booking page** - shareable `/reservar` URL; Spanish-only; mobile-first. Renders available slots, service picker, and cash deposit expectations.
 - **Owner dashboard** - calendar view, customer list, service editor, staff management, settings. Hotwire-reactive; no SPA.
 - **Background jobs (Solid Queue)** - schedules reminders (24h and 2h before), Google Calendar sync, webhook delivery retries.
 - **WhatsApp integration (Twilio)** - sends templated messages, receives inbound replies via webhook, handles confirm/cancel/reschedule intents.
@@ -91,12 +91,12 @@ flowchart TD
 
 - Row-level tenancy with `acts_as_tenant` scoped on `account_id`.
 - One `Account` per business; one or more `Users` per account (owner + staff).
-- Subdomain routing resolves tenant before any query executes.
-- All queries automatically scoped; explicit `ActsAsTenant.with_tenant` blocks in jobs.
+- Dashboard queries are scoped through the signed-in user's account.
+- Jobs load records by ID and use the record's account for account-specific work.
 
 ### Core data model (sketch)
 
-- `Account` - business (name, subdomain, timezone, locale=es-MX, plan, whatsapp_quota_used)
+- `Account` - business (name, timezone, locale=es-MX, plan, whatsapp_quota_used)
 - `User` - owner or staff (email, phone, role, google_oauth_tokens)
 - `Service` - offered service (name, duration, price, requires_address, deposit_amount)
 - `StaffAvailability` - per-user weekly availability + exceptions
@@ -157,7 +157,7 @@ sequenceDiagram
 ### In scope
 
 - Sign up / onboarding flow in Spanish, under 5 minutes to a live booking page
-- Public booking page per business (subdomain + custom path)
+- Public booking page
 - Multiple services with duration, price, optional service address, optional deposit
 - Customer records: contact, full booking history, notes, custom fields, tags
 - Recurring appointments (weekly, biweekly, monthly; with configurable end date)
@@ -219,7 +219,7 @@ sequenceDiagram
 
 ## 8. Pricing Model
 
-- **Libre (free)**: up to 3 services, 2 staff, unlimited bookings, 100 business-initiated WhatsApp conversations/month (per Meta's billing model - a "conversation" is a 24h window opened by an outbound template), Citable subdomain, basic support.
+- **Libre (free)**: up to 3 services, 2 staff, unlimited bookings, 100 business-initiated WhatsApp conversations/month (per Meta's billing model - a "conversation" is a 24h window opened by an outbound template), basic support.
 - **Pro (target MXN $299/mo)**: unlimited services, unlimited staff, 1,000 WhatsApp conversations/month, custom branding, custom domain, priority support.
 - **Overage in v1**: none. When the monthly quota is exhausted, outbound WhatsApp sends fall back to email automatically; no bookings are blocked. Overage pricing is deferred to v1.1 once real Twilio Mexico WhatsApp pricing has been validated.
 - **Customer-facing label**: "mensajes" in UI copy (simpler mental model); internal accounting uses "conversations" to match Meta billing.

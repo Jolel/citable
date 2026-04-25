@@ -19,7 +19,7 @@ class Dashboard::SettingsController < Dashboard::BaseController
   private
 
   def account_params
-    params.require(:account).permit(:name, :timezone, :subdomain)
+    params.require(:account).permit(:name, :timezone)
   end
 
   def require_owner!

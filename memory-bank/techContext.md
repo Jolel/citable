@@ -39,11 +39,7 @@ rails db:create db:migrate db:seed
 bin/dev   # starts Rails + TailwindCSS watcher
 ```
 
-For subdomain testing locally, add entries to `/etc/hosts`:
-```
-127.0.0.1 ana.localhost
-```
-Then access `http://ana.localhost:3000`
+Access the app locally at `http://localhost:3000`.
 
 ## Environment / Credentials
 Secrets are stored in Rails encrypted credentials. Keys needed:

@@ -16,7 +16,7 @@ class Public::BookingsController < ApplicationController
 
     if @booking.save
       WhatsappSendJob.perform_later(@booking.id, :confirmation)
-      redirect_to public_booking_confirmation_path(slug: @account.subdomain, id: @booking)
+      redirect_to public_booking_confirmation_path(id: @booking)
     else
       @services = @account.services.active
       render :new, status: :unprocessable_entity
@@ -30,7 +30,7 @@ class Public::BookingsController < ApplicationController
   private
 
   def set_account
-    @account = Account.find_by(subdomain: params[:slug])
+    @account = Account.order(:id).first
     render plain: "Negocio no encontrado", status: :not_found unless @account
   end
 

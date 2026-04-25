@@ -17,46 +17,13 @@ RSpec.describe Account, type: :model do
     subject { build(:account) }
 
     it { is_expected.to validate_presence_of(:name) }
-    it { is_expected.to validate_presence_of(:subdomain) }
-    it { is_expected.to validate_uniqueness_of(:subdomain).case_insensitive }
     it { is_expected.to validate_presence_of(:timezone) }
     it { is_expected.to validate_presence_of(:locale) }
     it { is_expected.to validate_numericality_of(:whatsapp_quota_used).is_greater_than_or_equal_to(0) }
 
-    it "is invalid with an uppercase subdomain" do
-      account = build(:account, subdomain: "MyShop")
-      account.valid?
-      expect(account.subdomain).to eq("myshop")
-    end
-
-    it "is invalid with subdomain containing special characters" do
-      account = build(:account, subdomain: "my shop!")
-      expect(account).not_to be_valid
-      expect(account.errors[:subdomain]).to be_present
-    end
-
-    it "accepts subdomain with hyphens and numbers" do
-      account = build(:account, subdomain: "ana-studio-2")
-      expect(account).to be_valid
-    end
-
     it "validates plan is in allowed values" do
       account = build(:account, plan: "enterprise")
       expect(account).not_to be_valid
-    end
-  end
-
-  describe "#downcase_subdomain" do
-    it "downcases subdomain before validation" do
-      account = build(:account, subdomain: "AnaStudio")
-      account.valid?
-      expect(account.subdomain).to eq("anastudio")
-    end
-
-    it "strips whitespace from subdomain" do
-      account = build(:account, subdomain: "  ana  ")
-      account.valid?
-      expect(account.subdomain).to eq("ana")
     end
   end
 

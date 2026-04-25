@@ -8,25 +8,19 @@ Row-level tenancy via `acts_as_tenant` scoped on `account_id`.
 - `User` belongs_to Account via `account_id` — NOT acts_as_tenant (Devise handles auth cross-tenant; scoping is manual)
 - All other models use `acts_as_tenant(:account)` which automatically adds `account_id` WHERE clause to every query
 - `ActsAsTenant.require_tenant = true` globally in initializer — any query without an active tenant raises an error (security guarantee)
-- `ApplicationController#resolve_tenant` sets the current tenant from the subdomain before every request
 - Background jobs use `ActsAsTenant.with_tenant(booking.account) { ... }` block
 
-## Subdomain Routing
+## Account Resolution
 
-```
-ana.citable.mx → resolves Account with subdomain="ana" → set_current_tenant
-```
-
-- `ApplicationController#resolve_tenant` reads `request.subdomain` and calls `set_current_tenant`
-- Dashboard routes also use the subdomain to scope queries
-- Public booking page is at `/reservar` under the tenant subdomain
+- Dashboard routes use `current_user.account`.
+- The public booking page is at `/reservar`.
 
 ## Controller Hierarchy
 
 ```
 ActionController::Base
-  └── ApplicationController          (tenant resolution)
-        ├── Dashboard::BaseController (authenticate_user! + require_tenant!)
+  └── ApplicationController
+        ├── Dashboard::BaseController (authenticate_user!)
         │     ├── Dashboard::BookingsController
         │     ├── Dashboard::CustomersController
         │     ├── Dashboard::ServicesController
@@ -98,7 +92,6 @@ ActionController::Base (direct, no CSRF)
 
 ## Key Indexes
 
-- `accounts.subdomain` — unique, used on every request for tenant lookup
 - `bookings.(account_id, starts_at)` — calendar queries
 - `bookings.(user_id, starts_at)` — per-staff calendar
 - `customers.(account_id, phone)` — inbound WhatsApp matching

@@ -11,7 +11,7 @@
 - [x] Devise configuration (initializer)
 - [x] acts_as_tenant configured (require_tenant = true)
 - [x] money-rails configured (MXN default)
-- [x] ApplicationController with subdomain tenant resolution
+- [x] Dashboard account access through the signed-in user
 - [x] Dashboard controllers (bookings, customers, services, staff, settings)
 - [x] Public booking controller
 - [x] Webhook controllers (Twilio inbound)

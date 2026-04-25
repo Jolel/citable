@@ -50,11 +50,11 @@ Rails.application.routes.draw do
     post "google_calendar", to: "google_calendar#create", as: :google_calendar
   end
 
-  # Public booking pages (account resolved from :slug in path)
+  # Public booking pages
   scope module: :public do
-    get  "/reservar/:slug",                  to: "bookings#new",          as: :public_booking
-    post "/reservar/:slug",                  to: "bookings#create"
-    get  "/reservar/:slug/confirmada/:id",   to: "bookings#confirmation", as: :public_booking_confirmation
+    get  "/reservar",                  to: "bookings#new",          as: :public_booking
+    post "/reservar",                  to: "bookings#create"
+    get  "/reservar/confirmada/:id",   to: "bookings#confirmation", as: :public_booking_confirmation
   end
 
   # Default root
