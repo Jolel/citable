@@ -12,7 +12,7 @@ A SaaS app that:
 - Sends WhatsApp confirmations and reminders automatically (Twilio)
 - Lets clients confirm or cancel by replying "1" or "2" on WhatsApp
 - Stores all customers, bookings, and notes in one place
-- Works cash-first (pay on arrival) with optional Stripe deposit
+- Works cash-first (pay on arrival), including any deposits
 - Has a genuinely usable free tier
 
 ## Primary Persona
@@ -26,9 +26,9 @@ A SaaS app that:
 - Multi-staff calendars + per-staff availability
 - WhatsApp confirmations + 24h/2h reminders
 - Email fallback when WhatsApp quota exhausted
-- Optional Stripe MX deposits
+- Cash deposits, tracked without an online payment provider
 - Google Calendar two-way sync (per staff)
-- Free + Pro tier billing
+- Free + Pro tiers
 
 ## Non-Goals (v1)
 CFDI invoicing, dispatch/routing, native apps, English UI, MercadoPago, SMS fallback, bulk broadcasts.

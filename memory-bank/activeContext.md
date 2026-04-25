@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Google OAuth2 + Calendar sync feature complete. The dashboard booking calendar is now implemented in a first pass: native Hotwire + Stimulus, `Day` + `Week` views, drag-and-drop rescheduling, immediate save, staff columns, and warnings for overlaps/out-of-hours placements. Broader next phase still includes Twilio WhatsApp, Stripe deposits, and production readiness.
+Google OAuth2 + Calendar sync feature complete. The dashboard booking calendar is now implemented in a first pass: native Hotwire + Stimulus, `Day` + `Week` views, drag-and-drop rescheduling, immediate save, staff columns, and warnings for overlaps/out-of-hours placements. Broader next phase still includes Twilio WhatsApp, cash-payment polish, and production readiness.
 
 ## What Was Just Built (Foundation)
 
@@ -41,7 +41,6 @@ Google OAuth2 + Calendar sync feature complete. The dashboard booking calendar i
 - `Dashboard::SettingsController` — owner-only account settings
 - `Public::BookingsController` — public booking page (new/create/confirmation)
 - `Webhooks::TwilioController` — inbound WhatsApp reply handler (1=confirm, 2=cancel)
-- `Webhooks::StripeController` — payment_intent.succeeded → deposit_paid + confirm
 
 ### Jobs (app/jobs/)
 - `ReminderJob` — routes to WhatsApp or email fallback, marks sent
@@ -72,7 +71,6 @@ Creates: Account "Estudio de Ana" (subdomain: ana), owner user ana@example.com, 
 - Add Google credentials (`rails credentials:edit`: `google.client_id`, `google.client_secret`, `google.webhook_token`)
 - Configure Google Cloud Project: enable Calendar API, add OAuth redirect URIs
 - Add Twilio WhatsApp credentials + test message templates
-- Add Stripe Mexico credentials + test deposit flow
 - Add Resend email credentials
 
 ### Design system notes
@@ -81,11 +79,9 @@ Creates: Account "Estudio de Ana" (subdomain: ana), owner user ana@example.com, 
 - **Custom Tailwind classes**: `bg-brand`, `text-forest`, `bg-cream`, `font-fraunces`, `font-jakarta`, etc. (defined in `@theme`)
 
 ### Before Production
-- Add Stripe credentials: `rails credentials:edit`
 - Add Twilio credentials
 - Add Resend credentials
 - Submit WhatsApp message templates to Meta for approval
-- Set up Stripe Mexico account
 - Configure subdomain routing (Cloudflare or DNS)
 - Set up Google OAuth for Calendar sync
 - Write RSpec tests, especially cross-tenant isolation tests

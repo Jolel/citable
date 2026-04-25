@@ -15,7 +15,7 @@ Mexican local-service businesses (cleaners, tutors, groomers, stylists, A/C tech
 
 ### Proposed Solution
 
-Citable is a Spanish-first, WhatsApp-native appointment booking and light CRM for Mexican local-service businesses. It replaces their WhatsApp + Sheets + libreta stack with a booking page, customer records, automated WhatsApp reminders, and multi-staff calendars. Cash-first flow matches Mexican reality; optional Stripe MX deposits are available. The free tier stays usable for true solo operators indefinitely; paid tier (MXN $299/mo) unlocks scale.
+Citable is a Spanish-first, WhatsApp-native appointment booking and light CRM for Mexican local-service businesses. It replaces their WhatsApp + Sheets + libreta stack with a booking page, customer records, automated WhatsApp reminders, and multi-staff calendars. Cash-first flow matches Mexican reality; deposits are paid in cash on arrival. The free tier stays usable for true solo operators indefinitely; paid tier (MXN $299/mo) unlocks scale.
 
 ### Success Criteria
 
@@ -95,15 +95,14 @@ Acceptance criteria:
 - Ana can add free-form notes and custom fields on a customer (e.g., "tinte rubio cenizo, alergica a X").
 - Search by name or phone returns matching customers in < 300ms for up to 10,000 customers.
 
-#### Story 5: As Ana, I want to take deposits online for high-value services, so no-shows cost them something.
+#### Story 5: As Ana, I want to require cash deposits for high-value services, so no-shows cost them something.
 
 Acceptance criteria:
 
-- Per service, Ana can toggle "requires deposit" and set a fixed MXN amount.
-- On the booking page, deposit services show the deposit amount and a "Pagar depósito" step.
-- Booking is created as `pending_payment`; it converts to `confirmed` only after Stripe webhook confirms payment.
-- If payment is not completed within 30 minutes, the slot is released and the pending booking is cancelled.
-- Deposits are visible on the booking detail; refunds are a one-click action for the owner.
+- Per service, Ana can set a fixed MXN deposit amount.
+- On the booking page, deposit services clearly state that the deposit is paid in cash on arrival.
+- Booking is created as `pending` and can be confirmed through the normal WhatsApp reply flow.
+- Deposits are visible on the booking detail for staff reference.
 
 #### Story 6: As Luis, I want each of my techs to have their own calendar and bookings, so my team can be scheduled properly.
 
@@ -131,7 +130,7 @@ Acceptance criteria:
 - 100% of user-facing copy is in es-MX Spanish on launch.
 - Date/time formats follow Mexican conventions (24-hour or 12-hour AM/PM configurable; `d/m/Y`).
 - Currency is MXN with `$1,299.00` formatting.
-- No English strings are visible in the product or emails, including error messages, Stripe pages (use Stripe locale=es), and WhatsApp templates.
+- No English strings are visible in the product or emails, including error messages and WhatsApp templates.
 
 #### Story 9: As a free-tier user, I want to know clearly when I'm approaching limits so I can upgrade before I'm blocked.
 
@@ -140,7 +139,7 @@ Acceptance criteria:
 - Dashboard shows a WhatsApp quota meter (e.g., "72 de 100 mensajes este mes"). The UI label is "mensajes" for simplicity, but internally we count Meta-billed business-initiated conversations (24h windows) - one conversation per customer per day regardless of how many messages are exchanged.
 - At 80% of monthly quota, show a soft notice and email the owner.
 - At 100%, new outbound WhatsApp sends are auto-replaced with email fallback; no bookings are blocked. There is no overage billing in v1.
-- One-click upgrade flow to Pro, handled entirely in Stripe Checkout (Spanish locale).
+- Upgrade requests are handled through an owner-facing flow without online card collection in v1.
 
 #### Story 10: As Ana, I want my Google Calendar to stay in sync so my bookings don't conflict with personal events.
 
@@ -172,7 +171,6 @@ Acceptance criteria:
 ### Third-party services and APIs
 
 - **Twilio WhatsApp Business API**: send templated messages (confirmation, 24h reminder, 2h reminder, cancellation, reschedule link); receive inbound replies via webhook; handle opt-outs per Meta policy.
-- **Stripe Mexico**: Payment Intents for deposits; Billing for Pro subscriptions; webhook signature verification; Mexican OXXO support via Payment Methods.
 - **Google Calendar API**: OAuth 2.0; `calendar.events` scope; two-way sync per user; push notifications via Watch API (fall back to polling every 5 min if Watch unavailable).
 - **Resend**: transactional email for fallback notifications and owner-facing alerts.
 - **Sentry**: error reporting from Rails app and background jobs.
@@ -220,7 +218,7 @@ See architecture and sequence diagrams in the [design spec §4](2026-04-17-whats
 
 - **Auth**: Devise with email/password. Google OAuth for staff-level calendar sync (separate from login).
 - **DB**: Postgres. Daily automated backups via hosting provider. One logical database per environment.
-- **Webhooks inbound**: Twilio (WhatsApp messages + status), Stripe (payment intents + subscriptions). All verified via signatures.
+- **Webhooks inbound**: Twilio (WhatsApp messages + status), verified via signature.
 - **Webhooks outbound**: none in v1.
 - **Public API**: none in v1. Build internal-only JSON endpoints for the dashboard's Hotwire use only.
 
@@ -239,7 +237,7 @@ See [design spec §4](2026-04-17-whatsapp-booking-mx-design.md#core-data-model-s
 ### Security & Privacy
 
 - Jurisdiction: Mexico. Compliance: LFPDPPP (Mexican privacy law). Publish aviso de privacidad at `/privacidad`.
-- No card data stored; Stripe handles all PCI scope.
+- No card data is collected or stored in v1.
 - Passwords hashed with bcrypt via Devise.
 - All secrets via Rails encrypted credentials; no secrets in repo.
 - HTTPS enforced site-wide via hosting provider + HSTS header.
@@ -261,15 +259,15 @@ See [design spec §4](2026-04-17-whatsapp-booking-mx-design.md#core-data-model-s
 - WhatsApp confirmation + 24h and 2h reminders with templated messages
 - Inbound WhatsApp reply handling (confirm / cancel)
 - Google Calendar two-way sync
-- Optional Stripe MX deposits
+- Cash deposit tracking
 - Free tier enforcement (services, staff, WhatsApp quota)
-- Pro subscription billing via Stripe
+- Pro upgrade request flow without online card collection
 - Spanish-only UI, es-MX locale
 - Landing page + marketing site copy in Spanish
 
 **v1.1 (+4 weeks)**
 
-- MercadoPago integration as alternate payment method
+- Online payment rail integration
 - SMS fallback via Twilio (for numbers without WhatsApp)
 - Recurring appointments UX polish (edit single vs. all)
 - CSV customer import
@@ -294,12 +292,11 @@ See [design spec §4](2026-04-17-whatsapp-booking-mx-design.md#core-data-model-s
 
 1. **WhatsApp template approval delays** - Meta approval can take days to weeks. Mitigation: submit templates week 1; ship email-only fallback behind feature flag so we can demo before templates approve.
 2. **Twilio Mexico WhatsApp pricing** - per-message cost determines free-tier math. Mitigation: validate pricing in week 1; if it breaks economics, migrate to 360dialog or direct Meta BSP.
-3. **Stripe Mexico onboarding latency** - KYB can take days. Mitigation: start onboarding week 1.
-4. **Tenant data leakage** - the single most dangerous bug class in multi-tenant SaaS. Mitigation: `acts_as_tenant` with `require_tenant!` enabled globally; cross-tenant RSpec tests for every controller; add `bullet` gem and `brakeman` to CI.
-5. **Solo founder velocity risk** - 8-10 week MVP assumes 20-30 hrs/wk. Mitigation: enforce strict v1 scope; every "nice to have" goes to v1.1.
-6. **Reminder unit economics** - if WhatsApp messages cost more than the value of a prevented no-show, the model breaks. Mitigation: only send WA reminders for bookings worth > message cost; measure no-show rate reduction; fall back to email for low-value bookings if needed.
-7. **Availability calculation concurrency** - two customers clicking the same slot simultaneously. Mitigation: `SELECT ... FOR UPDATE` around slot reservation; unique constraint on `(staff_id, starts_at)` for active bookings; integration test simulating concurrent bookings.
-8. **Google Calendar two-way sync edge cases** - recurring events, all-day events, timezone mismatches. Mitigation: scope v1 to non-recurring Google events only for blocking; document known limitations.
+3. **Tenant data leakage** - the single most dangerous bug class in multi-tenant SaaS. Mitigation: `acts_as_tenant` with `require_tenant!` enabled globally; cross-tenant RSpec tests for every controller; add `bullet` gem and `brakeman` to CI.
+4. **Solo founder velocity risk** - 8-10 week MVP assumes 20-30 hrs/wk. Mitigation: enforce strict v1 scope; every "nice to have" goes to v1.1.
+5. **Reminder unit economics** - if WhatsApp messages cost more than the value of a prevented no-show, the model breaks. Mitigation: only send WA reminders for bookings worth > message cost; measure no-show rate reduction; fall back to email for low-value bookings if needed.
+6. **Availability calculation concurrency** - two customers clicking the same slot simultaneously. Mitigation: `SELECT ... FOR UPDATE` around slot reservation; unique constraint on `(staff_id, starts_at)` for active bookings; integration test simulating concurrent bookings.
+7. **Google Calendar two-way sync edge cases** - recurring events, all-day events, timezone mismatches. Mitigation: scope v1 to non-recurring Google events only for blocking; document known limitations.
 
 ### Business Risks
 
@@ -317,4 +314,4 @@ See [design spec §4](2026-04-17-whatsapp-booking-mx-design.md#core-data-model-s
 - Privacy policy and terms of service published in Spanish.
 - Public marketing page live with clear pricing, sign-up CTA, and 2-3 customer testimonials from pilots.
 - Sentry, backups, and uptime monitoring live.
-- Runbook for: restoring from backup, rotating Twilio/Stripe keys, responding to a tenant-isolation incident.
+- Runbook for: restoring from backup, rotating Twilio keys, responding to a tenant-isolation incident.

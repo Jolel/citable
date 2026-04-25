@@ -27,7 +27,7 @@ Citable is a WhatsApp-based appointment booking SaaS for Mexican service busines
 - **Frontend**: Hotwire (Turbo + Stimulus), Tailwind CSS, Importmap (no Node)
 - **Auth**: Devise (users), acts_as_tenant (multi-tenancy by subdomain)
 - **Background jobs**: Solid Queue (runs inside Puma)
-- **External services**: Twilio (WhatsApp), Stripe (deposits), Resend (email fallback)
+- **External services**: Twilio (WhatsApp), Resend (email fallback)
 - **Money**: money-rails, default currency MXN, stored as integer cents
 - **Locale/TZ**: `es-MX`, `America/Mexico_City`
 
@@ -63,7 +63,6 @@ CI runs: Brakeman → bundler-audit → importmap audit → Rubocop → RSpec wi
 ### Webhooks (no CSRF / no auth)
 
 - **`/webhooks/twilio`** — Receives WhatsApp replies; "1" confirms a booking, "2" cancels it. Logs to `MessageLog`.
-- **`/webhooks/stripe`** — Payment events for deposit handling.
 
 ### Background Jobs (Solid Queue)
 

@@ -46,7 +46,7 @@ First 100 users via:
 
 1. **WhatsApp-first communication** - confirmations, reminders, cancellations, and reschedules all happen in WhatsApp. No competitor in our price band does this natively.
 2. **Spanish-native UX** - Mexican idioms, tone, and terminology. Not a translation layer over an English product.
-3. **Cash-first booking flow** - bookings default to "pagar en el lugar"; online deposit via Stripe MX is optional. Matches real Mexican local-service workflows.
+3. **Cash-first booking flow** - bookings default to "pagar en el lugar"; deposits are also paid in cash on arrival. Matches real Mexican local-service workflows.
 4. **Genuinely usable free tier** - multiple services, recurring bookings, and basic multi-staff remain on free. Users don't have to upgrade to use the product, only to scale.
 5. **Service-business-native from v1** - service addresses on bookings, recurring weekly/biweekly/monthly appointments, multi-staff calendars.
 
@@ -64,7 +64,6 @@ flowchart TD
     DB[("Postgres")]
     Queue["Solid Queue<br/>(background jobs)"]
     Google["Google Calendar API"]
-    Stripe["Stripe Mexico"]
     Email["Resend<br/>(email fallback)"]
 
     Client --> Public
@@ -76,19 +75,16 @@ flowchart TD
     Queue --> Google
     Queue --> Email
     WA -->|"inbound webhooks<br/>(confirm/cancel)"| App
-    App --> Stripe
-    Stripe -->|"webhooks"| App
 ```
 
 
 
 ### Components
 
-- **Public booking page** - subdomain per tenant (`ana.citable.mx`) + custom path; Spanish-only; mobile-first. Renders available slots, service picker, deposit flow.
+- **Public booking page** - subdomain per tenant (`ana.citable.mx`) + custom path; Spanish-only; mobile-first. Renders available slots, service picker, and cash deposit expectations.
 - **Owner dashboard** - calendar view, customer list, service editor, staff management, settings. Hotwire-reactive; no SPA.
 - **Background jobs (Solid Queue)** - schedules reminders (24h and 2h before), Google Calendar sync, webhook delivery retries.
 - **WhatsApp integration (Twilio)** - sends templated messages, receives inbound replies via webhook, handles confirm/cancel/reschedule intents.
-- **Stripe Mexico** - optional deposits at booking time; webhooks update booking status.
 - **Google Calendar** - two-way sync per staff member; OAuth stored per user.
 
 ### Multi-tenancy model
@@ -117,19 +113,13 @@ sequenceDiagram
     participant C as Cliente
     participant P as Public page
     participant A as Citable app
-    participant S as Stripe (optional)
     participant W as WhatsApp (Twilio)
     participant G as Google Calendar
 
     C->>P: selects service + slot + enters name/phone
     P->>A: POST /bookings
     A->>A: validate availability, create Booking (pending)
-    alt service has deposit
-        A->>S: create PaymentIntent
-        S-->>C: checkout
-        C->>S: pays
-        S-->>A: webhook payment_intent.succeeded
-    end
+    A->>A: note any cash deposit requirement
     A->>A: confirm Booking
     A->>W: send confirmation (WhatsApp template)
     A->>G: create calendar event
@@ -175,10 +165,10 @@ sequenceDiagram
 - WhatsApp confirmations and reminders (24h and 2h before)
 - WhatsApp reply handling: confirm (`1`), cancel (`2`), reschedule link
 - Email fallback when WhatsApp quota exhausted or delivery fails
-- Optional Stripe MX deposits (cash-first by default)
+- Cash deposit tracking
 - Google Calendar two-way sync (per staff user)
 - Free tier quota enforcement (services, staff, monthly WhatsApp message count)
-- Billing / upgrade flow via Stripe subscription
+- Pro upgrade request flow without online card collection
 
 ### Out of scope (deliberate non-goals)
 
@@ -202,7 +192,7 @@ sequenceDiagram
 - **Styling**: TailwindCSS (Rails 8 default)
 - **Auth**: Devise; multi-tenancy via `acts_as_tenant` scoped on `account_id`
 - **WhatsApp**: Twilio WhatsApp Business API (templated messages + inbound webhooks)
-- **Payments**: Stripe Mexico (Payment Intents API for deposits, Billing for subscriptions)
+- **Payments**: Cash on arrival; no online payment provider in v1
 - **Email**: Resend (transactional only; no marketing in v1)
 - **Hosting**: Hatchbox on a DigitalOcean droplet OR Render (managed Postgres)
 - **Monitoring**: Sentry for errors; Rails `rails/info` for ops; Honeybadger optional
@@ -212,18 +202,18 @@ sequenceDiagram
 
 - CRUD-heavy, multi-tenant SaaS with lots of forms and admin views - Rails sweet spot
 - Hotwire eliminates the need for a separate React frontend, cutting solo-founder scope ~40%
-- Strong gem ecosystem for multi-tenancy (`acts_as_tenant`), auth (Devise), payments (`stripe-ruby`), and Twilio
+- Strong gem ecosystem for multi-tenancy (`acts_as_tenant`), auth (Devise), money formatting, and Twilio
 - Solo-founder velocity matters more than theoretical scalability at this stage
 
 ## 7. Security & Privacy
 
 - **Jurisdiction**: Mexico. Applicable law: LFPDPPP (Ley Federal de Protección de Datos Personales en Posesión de los Particulares).
-- **PII handled**: business owner name/email/phone, end-customer name/phone, booking history, optional notes (may contain health or sensitive info at owner's discretion), payment metadata (no full card data - Stripe holds it).
+- **PII handled**: business owner name/email/phone, end-customer name/phone, booking history, optional notes (may contain health or sensitive info at owner's discretion), and cash deposit notes.
 - **Data residency**: v1 ships with US-based hosting (Render or Hatchbox on DO); evaluate MX region or AWS `mx-central-1` if/when required by customer contracts.
 - **Privacy notice**: public privacy policy in Spanish at `/privacidad`, aviso de privacidad per LFPDPPP requirements.
 - **Access controls**: role-based (owner vs. staff) on the dashboard; multi-tenant scoping on every query.
 - **Password storage**: bcrypt via Devise.
-- **Secrets**: Rails encrypted credentials; Stripe/Twilio keys never in source.
+- **Secrets**: Rails encrypted credentials; Twilio keys never in source.
 - **Backups**: daily automated Postgres backups (provider-managed).
 - **Audit**: append-only `MessageLog` for all comms; booking status history tracked.
 
@@ -238,7 +228,7 @@ Entry price is deliberately below AgendaPro (~USD $25+/mo) and well below Jobber
 
 ## 9. Phased Roadmap
 
-- **MVP** (~8-10 weeks solo, ~20-30 hrs/wk): booking page, customer records, WhatsApp reminders, Google Calendar sync, optional Stripe deposits, free + Pro tier billing.
+- **MVP** (~8-10 weeks solo, ~20-30 hrs/wk): booking page, customer records, WhatsApp reminders, Google Calendar sync, cash deposit tracking, free + Pro tiers.
 - **v1.1** (+4 weeks): MercadoPago, SMS fallback via Twilio, recurring appointments polish, customer import from CSV.
 - **v1.2**: customer tags/segments, bulk WhatsApp broadcasts (templated), basic analytics dashboard.
 - **v2**: team routing, WhatsApp chatbot booking (customers book via DM), LATAM expansion (CO, AR, CL), CFDI facturación integration.
@@ -248,9 +238,8 @@ Entry price is deliberately below AgendaPro (~USD $25+/mo) and well below Jobber
 1. **WhatsApp Business API approval** - Meta template approval can take days to weeks. Mitigation: submit templates the first week of development; have email-only fallback ready.
 2. **Twilio Mexico WhatsApp pricing** - per-message cost determines free-tier economics. Mitigation: validate pricing in week 1 before finalizing the 100/mo allowance; move to 360dialog or direct Meta if Twilio costs blow up the unit economics.
 3. **Solo founder velocity** - 8-10 week MVP assumes 20-30 hrs/wk. Mitigation: ruthlessly defer everything in v1.1+; do not let scope creep into MVP.
-4. **Stripe Mexico onboarding latency** - Stripe Mexico KYB can take days. Mitigation: start Stripe onboarding in week 1.
-5. **Tenant data leakage** - the #1 multi-tenant SaaS bug. Mitigation: `acts_as_tenant` with `require_tenant` enabled globally; integration tests that attempt cross-tenant reads and assert they fail.
-6. **Reminder cost vs. value** - if WhatsApp messages cost more than the value of a prevented no-show, the model breaks. Mitigation: only send reminders for bookings worth more than the message cost; track no-show rate reduction.
+4. **Tenant data leakage** - the #1 multi-tenant SaaS bug. Mitigation: `acts_as_tenant` with `require_tenant` enabled globally; integration tests that attempt cross-tenant reads and assert they fail.
+5. **Reminder cost vs. value** - if WhatsApp messages cost more than the value of a prevented no-show, the model breaks. Mitigation: only send reminders for bookings worth more than the message cost; track no-show rate reduction.
 
 ## 11. Open Questions
 
@@ -266,4 +255,3 @@ Entry price is deliberately below AgendaPro (~USD $25+/mo) and well below Jobber
 - No-show rate reduction of >= 25% vs. customer's self-reported baseline
 - P95 booking page load < 2s on 4G in Mexico
 - Zero cross-tenant data leaks in the first 90 days
-

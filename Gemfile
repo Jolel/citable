@@ -45,9 +45,6 @@ gem "image_processing", "~> 1.2"
 # Authentication
 gem "devise"
 
-# Payments
-gem "stripe"
-
 # WhatsApp via Twilio
 gem "twilio-ruby"
 

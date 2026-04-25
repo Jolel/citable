@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_18_000010) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_24_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -39,7 +39,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_18_000010) do
     t.bigint "service_id", null: false
     t.datetime "starts_at", null: false
     t.string "status", default: "pending", null: false
-    t.string "stripe_payment_intent_id"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false, comment: "staff member assigned"
     t.index ["account_id", "starts_at"], name: "index_bookings_on_account_id_and_starts_at"

@@ -47,7 +47,6 @@ Rails.application.routes.draw do
   # Inbound webhooks (no auth, no CSRF)
   namespace :webhooks do
     post "twilio",          to: "twilio#create",          as: :twilio
-    post "stripe",          to: "stripe#create",          as: :stripe
     post "google_calendar", to: "google_calendar#create", as: :google_calendar
   end
 

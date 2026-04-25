@@ -30,7 +30,7 @@ Market: Mexico (launch); target segment: solo and 2-3 person local-service busin
 - Availability rules (hours, buffers, min-notice, max-advance)
 - Multiple service types with duration and price
 - Customer record with contact, history, notes
-- Payment collection (we start with optional Stripe MX deposit)
+- Cash-first payment collection and deposit tracking
 - Timezone handling (single-tz Mexico is simpler than global competitors)
 - Self-service cancel / reschedule
 

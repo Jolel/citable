@@ -5,8 +5,8 @@
 ## What Works (Code Written, Needs `db:migrate` to Run)
 
 - [x] Rails 8.1.3 app created with PostgreSQL + TailwindCSS + Solid Queue
-- [x] All gems installed: devise, acts_as_tenant, stripe, twilio-ruby, resend, money-rails
-- [x] All 9 database migrations written
+- [x] All gems installed: devise, acts_as_tenant, twilio-ruby, resend, money-rails
+- [x] Database migrations written
 - [x] All 9 models with associations, enums, validations, scopes
 - [x] Devise configuration (initializer)
 - [x] acts_as_tenant configured (require_tenant = true)
@@ -14,7 +14,7 @@
 - [x] ApplicationController with subdomain tenant resolution
 - [x] Dashboard controllers (bookings, customers, services, staff, settings)
 - [x] Public booking controller
-- [x] Webhook controllers (Twilio inbound, Stripe payment events)
+- [x] Webhook controllers (Twilio inbound)
 - [x] ReminderJob with WhatsApp/email routing
 - [x] WhatsappSendJob with Twilio integration + MessageLog audit
 - [x] GoogleCalendarSyncJob (fully implemented — create/update/cancel sync)
@@ -47,7 +47,6 @@
 
 ### Integrations (when credentials are added)
 - [ ] Twilio WhatsApp templates submitted to Meta
-- [ ] Stripe Mexico account + webhooks configured
 - [ ] Resend email templates for fallback reminders
 - [x] Google OAuth2 flow for Calendar sync (code complete — needs credentials + Google Cloud Project setup)
 
@@ -90,7 +89,7 @@
 
 ## Phased Roadmap Alignment
 
-- **MVP** (~8-10 wks): Foundation done ✓. UI, WhatsApp, Stripe, Google Cal remain.
+- **MVP** (~8-10 wks): Foundation done ✓. UI, WhatsApp, cash-payment polish, Google Cal remain.
 - **v1.1**: MercadoPago, SMS fallback, CSV import
 - **v1.2**: Customer segments, bulk WhatsApp broadcasts, analytics
 - **v2**: WhatsApp chatbot booking, LATAM expansion, CFDI

@@ -14,7 +14,6 @@ class CreateBookings < ActiveRecord::Migration[8.1]
       t.string   :deposit_state, null: false, default: "not_required"
       t.datetime :confirmed_at
       t.string   :google_event_id
-      t.string   :stripe_payment_intent_id
 
       t.timestamps
     end

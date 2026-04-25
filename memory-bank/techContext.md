@@ -10,7 +10,7 @@
 - **Auth**: Devise 5.x
 - **Multi-tenancy**: acts_as_tenant 1.x (row-level, scoped on account_id)
 - **WhatsApp**: twilio-ruby (Twilio WhatsApp Business API)
-- **Payments**: stripe gem (Stripe Mexico - Payment Intents + Billing)
+- **Payments**: Cash on arrival; no online payment provider integration
 - **Email**: resend gem (transactional fallback)
 - **Money**: money-rails (integer cents, MXN default)
 - **Hosting**: Kamal with Docker (production); multi-database Solid stack (cache/queue/cable)
@@ -19,7 +19,6 @@
 ```
 gem "devise"
 gem "acts_as_tenant"
-gem "stripe"
 gem "twilio-ruby"
 gem "resend"
 gem "money-rails"
@@ -48,8 +47,6 @@ Then access `http://ana.localhost:3000`
 
 ## Environment / Credentials
 Secrets are stored in Rails encrypted credentials. Keys needed:
-- `stripe.secret_key`
-- `stripe.webhook_secret`
 - `twilio.account_sid`
 - `twilio.auth_token`
 - `twilio.whatsapp_number` (e.g. `+14155238886`)

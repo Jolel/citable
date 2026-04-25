@@ -56,7 +56,7 @@
                 </p>
                 <% if service.deposit_required? %>
                   <p class="text-[10px] text-brand font-semibold mt-0.5">
-                    Depósito $<%= number_with_delimiter(service.deposit_amount_cents / 100) %>
+                    Depósito en efectivo $<%= number_with_delimiter(service.deposit_amount_cents / 100) %>
                   </p>
                 <% end %>
               </div>

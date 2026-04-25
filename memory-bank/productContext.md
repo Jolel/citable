@@ -20,7 +20,7 @@ Calendly/Acuity don't integrate with WhatsApp and are English-first. Jobber is U
 ### For the Client (Rosa)
 1. Clicks link from Instagram or WhatsApp
 2. Picks a service → picks a slot → enters name + phone
-3. Pays deposit if required (optional Stripe checkout)
+3. Pays any required deposit in cash on arrival
 4. Gets WhatsApp confirmation immediately
 5. Gets WhatsApp reminder 24h and 2h before
 

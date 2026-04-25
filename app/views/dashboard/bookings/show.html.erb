@@ -130,9 +130,9 @@
         <dd class="col-span-2">
           <% case @booking.deposit_state %>
           <% when "deposit_pending" %>
-            <span class="badge-pending">Pendiente de pago</span>
+            <span class="badge-pending">Pendiente en efectivo</span>
           <% when "deposit_paid" %>
-            <span class="badge-confirmed">Pagado</span>
+            <span class="badge-confirmed">Pagado en efectivo</span>
           <% when "deposit_refunded" %>
             <span class="badge-cancelled">Reembolsado</span>
           <% end %>

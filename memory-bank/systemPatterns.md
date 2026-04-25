@@ -36,7 +36,6 @@ ActionController::Base
 
 ActionController::Base (direct, no CSRF)
   └── Webhooks::TwilioController
-  └── Webhooks::StripeController
 ```
 
 ## Job Architecture
