@@ -51,7 +51,7 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
       before { account.update!(ai_nlu_enabled: true) }
 
       let(:nlu_result) do
-        Llm::NluParser::Result.new(value: service, input_tokens: 80, output_tokens: 15, model: "gemini-2.0-flash")
+        Llm::NluParser::Result.new(value: service, input_tokens: 80, output_tokens: 15, model: Llm::Client::DEFAULT_MODEL)
       end
 
       it "calls the NLU parser and advances to awaiting_datetime" do
@@ -74,7 +74,7 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
         log = account.message_logs.inbound.order(:created_at).last
         expect(log.ai_input_tokens).to eq(80)
         expect(log.ai_output_tokens).to eq(15)
-        expect(log.ai_model).to eq("gemini-2.0-flash")
+        expect(log.ai_model).to eq(Llm::Client::DEFAULT_MODEL)
       end
 
       context "when the NLU parser returns nil (low confidence / error)" do
@@ -117,7 +117,7 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
 
       let(:parsed_time) { Time.zone.parse("2026-05-01T15:00:00") }
       let(:nlu_result) do
-        Llm::NluParser::Result.new(value: parsed_time, input_tokens: 95, output_tokens: 18, model: "gemini-2.0-flash")
+        Llm::NluParser::Result.new(value: parsed_time, input_tokens: 95, output_tokens: 18, model: Llm::Client::DEFAULT_MODEL)
       end
 
       it "calls the NLU parser and advances to confirming_booking" do

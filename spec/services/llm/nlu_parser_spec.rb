@@ -7,7 +7,7 @@ RSpec.describe Llm::NluParser do
 
   def stub_client(content:, input_tokens: 100, output_tokens: 20)
     allow(Llm::Client).to receive(:call).and_return(
-      content: content, input_tokens: input_tokens, output_tokens: output_tokens, model: "gemini-2.0-flash"
+      content: content, input_tokens: input_tokens, output_tokens: output_tokens, model: Llm::Client::DEFAULT_MODEL
     )
   end
 
@@ -29,7 +29,7 @@ RSpec.describe Llm::NluParser do
 
         expect(result.input_tokens).to eq(100)
         expect(result.output_tokens).to eq(20)
-        expect(result.model).to eq("gemini-2.0-flash")
+        expect(result.model).to eq(Llm::Client::DEFAULT_MODEL)
       end
     end
 

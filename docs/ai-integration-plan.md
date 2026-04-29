@@ -91,17 +91,20 @@ The FSM stays as the spine — `awaiting_service`, `awaiting_datetime`, `confirm
 
 ## 4. Low-Cost LLM Recommendations
 
-> Pricing as of mid-2025 — I'm flagging this because LLM pricing changes quarterly and you should re-verify before committing. Latency numbers are p50/p95 for a ~500-token prompt with ~150-token completion, measured from public benchmarks (artificialanalysis.ai, etc.) — wide variance by region.
+> Pricing as of April 2026 — re-verify before committing; LLM pricing and model names change frequently. Latency numbers are p50/p95 for a ~500-token prompt with ~150-token completion, measured from public benchmarks (artificialanalysis.ai, etc.) — wide variance by region.
 
 | Model | Input $/1M | Output $/1M | Spanish | Latency p50 / p95 | Context | Tools | Notes |
 |---|---|---|---|---|---|---|---|
 | **Claude Haiku 3.5** (Anthropic) | $0.80 | $4.00 | Excellent | 1.0s / 2.5s | 200k | Yes | Best Mexican Spanish in the cheap tier; strongest tool-use reliability of small models; Anthropic offers DPA for LFPDPPP. |
 | **GPT-4o mini** (OpenAI) | $0.15 | $0.60 | Good | 0.8s / 2.0s | 128k | Yes | Cheapest from a major lab. Spanish is good but more neutral/Castilian than Haiku. Tool-use reliable. |
-| **Gemini 2.0 Flash** (Google) | $0.10 | $0.40 | Good | 0.7s / 1.8s | 1M | Yes | Fastest and cheapest. Spanish quality acceptable for transactional flows; weaker on idiomatic warmth. Massive context is overkill for our use case. |
+| **Gemini 3.1 Flash** (Google) | $0.10 | $0.40 | Good | 0.7s / 1.8s | 1M | Yes | Fastest and cheapest; current default in Llm::Client. Free tier available (10 req/min, 250 req/day) but **free tier inputs may train Google models** — use paid tier in production for LFPDPPP compliance. |
+| **Gemini 3.1 Flash-Lite** (Google) | ~$0.04 | ~$0.16 | Good | 0.5s / 1.3s | 1M | Yes | Lowest cost option; higher free-tier rate limits (15 req/min, 1,000 req/day). Good for high-volume Phase 1 NLU parsing where tone matters less. |
 | **Llama 3.3 70B** (via Groq) | $0.59 | $0.79 | Acceptable | 0.3s / 0.8s | 128k | Yes (via Groq) | Insanely fast on Groq's hardware. Spanish is acceptable but inconsistent on regionalisms. Tool-use works but is fussier than Haiku/4o. |
 | **Mistral Small 3** (Mistral) | $0.20 | $0.60 | Acceptable | 1.0s / 2.5s | 32k | Yes | EU-based (helps with some compliance stories, less so for MX). Spanish is fine; weakest of the five on tone. Cheap. |
 
-**Vs. GPT-4o ($2.50 / $10.00) trade-offs:** all five models above are 5–25× cheaper. For a constrained, structured task like booking flow (not open-ended creative writing), Haiku 3.5 and 4o-mini reach 90%+ of GPT-4o quality at 5–15% of the cost. The remaining ~10% of cases (highly idiomatic or ambiguous messages) can be routed to Sonnet 4 as a "model upgrade" tier — see §6.
+**Vs. GPT-4o ($2.50 / $10.00) trade-offs:** all models above are 5–25× cheaper. For a constrained, structured task like booking flow (not open-ended creative writing), Haiku 3.5 and 4o-mini reach 90%+ of GPT-4o quality at 5–15% of the cost. The remaining ~10% of cases (highly idiomatic or ambiguous messages) can be routed to Sonnet 4 as a "model upgrade" tier — see §6.
+
+**Gemini free-tier summary (April 2026):** Flash-Lite 15 req/min / 1,000/day; Flash 10 req/min / 250/day; Pro 5 req/min / 100/day. Shared: 250k tokens/min. No credit card required. ⚠️ Free-tier data may be used to train Google models — switch to paid billing in production.
 
 > **Uncertain estimates:** latency p95 numbers vary significantly by region (LATAM is ~30–50% slower than US-East for OpenAI/Anthropic). Groq's latency is the most reliable since they publish per-call timings. I'd recommend a 1-week measurement period from Mexico City before locking in a default.
 

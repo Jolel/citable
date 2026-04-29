@@ -139,7 +139,20 @@ Credential notes:
 - `twilio.account_sid` and `twilio.auth_token` come from the Twilio Console.
 - `twilio.whatsapp_number` must be the WhatsApp sender number without the `whatsapp:` prefix.
 - For the Twilio WhatsApp Sandbox, the sender is usually `+14155238886`.
-- `gemini.api_key` is used only when `Account#ai_nlu_enabled` is true. Without it the app falls back to the strict date/service parser. Get a key at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) — the free tier is sufficient for local testing.
+- `gemini.api_key` is used only when `Account#ai_nlu_enabled` is true. Without it the app falls back to the strict date/service parser. Get a key at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
+- `gemini.model` is optional. When omitted, the app uses `gemini-2.0-flash`. Override to switch to a newer model (e.g. `gemini-3.1-flash`) without a code deploy. Verify current model IDs at [ai.google.dev/gemini-api/docs/models](https://ai.google.dev/gemini-api/docs/models).
+
+**Gemini free-tier limits (as of April 2026):**
+
+| Model | Requests / min | Requests / day | Shared token limit |
+|---|---|---|---|
+| Flash-Lite | 15 | 1,000 | 250,000 / min |
+| Flash | 10 | 250 | 250,000 / min |
+| Pro | 5 | 100 | 250,000 / min |
+
+For local development the free tier is sufficient. The seeded "Estudio de Ana" account averages one NLU call per booking step, well within the 250 requests/day Flash limit for testing.
+
+> ⚠️ **LFPDPPP / data-privacy notice — read before using in production:** On the Gemini free tier, Google may use inputs and outputs to improve its models. Customer names, phone fragments, and appointment details sent to the NLU parser could be included. **For production, switch to a paid Gemini plan** (billing enabled in Google Cloud) which opts you out of data training, and update the business's *aviso de privacidad* to disclose the AI processor. See `docs/ai-integration-plan.md §2` for the full compliance checklist.
 
 ---
 
@@ -341,6 +354,7 @@ After an NLU-assisted turn, the most recent inbound `MessageLog` for that custom
 account = Account.find_by(name: "Estudio de Ana")
 account.message_logs.inbound.where.not(ai_model: nil).last
 # => #<MessageLog ai_model: "gemini-2.0-flash", ai_input_tokens: 130, ai_output_tokens: 22>
+# (ai_model reflects whichever model is configured in credentials.gemini.model)
 ```
 
 **Skipping AI NLU locally:** if you do not add a `gemini.api_key` credential, `Llm::Client::Error` is rescued silently and the strict parser handles every turn exactly as before. You do not need a Gemini key to run the app or test the rest of the booking flow.

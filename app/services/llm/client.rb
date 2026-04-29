@@ -7,9 +7,10 @@ module Llm
   class Client
     Error = Class.new(StandardError)
 
-    ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-    MODEL    = "gemini-2.0-flash"
-    TIMEOUT  = 4 # seconds
+    # Override the model at runtime via credentials (gemini.model).
+    # Verify the current model ID at https://ai.google.dev/gemini-api/docs/models
+    DEFAULT_MODEL = "gemini-2.0-flash"
+    TIMEOUT       = 4 # seconds
 
     def self.call(...) = new.call(...)
 
@@ -22,13 +23,21 @@ module Llm
 
     private
 
+    def model
+      Rails.application.credentials.dig(:gemini, :model).presence || DEFAULT_MODEL
+    end
+
+    def endpoint
+      "https://generativelanguage.googleapis.com/v1beta/models/#{model}:generateContent"
+    end
+
     def api_key
       @api_key ||= Rails.application.credentials.dig(:gemini, :api_key).presence ||
         raise(Error, "Gemini API key not configured (credentials.gemini.api_key)")
     end
 
     def post(system:, user:, schema:)
-      uri  = URI("#{ENDPOINT}?key=#{api_key}")
+      uri  = URI("#{endpoint}?key=#{api_key}")
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl      = true
       http.open_timeout = TIMEOUT
@@ -72,7 +81,7 @@ module Llm
         content:       content,
         input_tokens:  usage["promptTokenCount"].to_i,
         output_tokens: usage["candidatesTokenCount"].to_i,
-        model:         MODEL
+        model:         model
       }
     rescue JSON::ParserError => e
       raise Error, "Gemini returned invalid JSON: #{e.message}"

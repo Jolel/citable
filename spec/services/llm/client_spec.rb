@@ -4,7 +4,9 @@ require "rails_helper"
 
 RSpec.describe Llm::Client do
   let(:api_key)  { "test-gemini-key" }
-  let(:endpoint) { "#{Llm::Client::ENDPOINT}?key=#{api_key}" }
+  let(:endpoint) do
+    "https://generativelanguage.googleapis.com/v1beta/models/#{Llm::Client::DEFAULT_MODEL}:generateContent?key=#{api_key}"
+  end
 
   before do
     allow(Rails.application.credentials).to receive(:dig).and_call_original
@@ -37,7 +39,7 @@ RSpec.describe Llm::Client do
         expect(result[:content]).to eq("starts_at" => "2026-05-02T15:00:00", "confidence" => 0.95)
         expect(result[:input_tokens]).to eq(120)
         expect(result[:output_tokens]).to eq(30)
-        expect(result[:model]).to eq("gemini-2.0-flash")
+        expect(result[:model]).to eq(Llm::Client::DEFAULT_MODEL)
       end
     end
 
