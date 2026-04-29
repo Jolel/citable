@@ -29,6 +29,17 @@ module Llm
       required: [ "service_index", "confidence" ]
     }.freeze
 
+    CONFIRMATION_SCHEMA = {
+      type: "object",
+      properties: {
+        decision:   { type: "string", nullable: true,
+                      description: '"confirmed" if the customer accepts the booking, "cancelled" if they decline, null if unclear' },
+        confidence: { type: "number",
+                      description: "0..1 — how certain the interpretation is" }
+      },
+      required: %w[decision confidence]
+    }.freeze
+
     MIN_CONFIDENCE = 0.8
 
     def self.parse_datetime(body, account:)
@@ -37,6 +48,10 @@ module Llm
 
     def self.parse_service(body, services, account:)
       new(account: account).parse_service(body, services)
+    end
+
+    def self.parse_confirmation(body, account:)
+      new(account: account).parse_confirmation(body)
     end
 
     def initialize(account:)
@@ -107,6 +122,33 @@ module Llm
       nil
     rescue ArgumentError, TypeError => e
       Rails.logger.warn "[Llm::NluParser] parse_service parse error: #{e.message}"
+      nil
+    end
+
+    # Returns Result(value: :confirmed | :cancelled) or nil.
+    def parse_confirmation(body)
+      system = <<~PROMPT.strip
+        Eres un asistente que interpreta si un cliente acepta o rechaza una cita por WhatsApp, en español mexicano.
+        Devuelve decision: "confirmed" si acepta (sí, si, dale, claro, va, ok, perfecto, confirmo, etc.),
+        "cancelled" si rechaza (no, mejor no, cancela, no puedo, no gracias, etc.), o null si no es claro.
+        Devuelve confidence entre 0 y 1.
+      PROMPT
+      user = "Mensaje del cliente: \"#{body}\""
+
+      result     = Llm::Client.call(system: system, user: user, schema: CONFIRMATION_SCHEMA)
+      parsed     = result[:content]
+      decision   = parsed["decision"]
+      confidence = parsed["confidence"].to_f
+
+      return nil if decision.nil? || confidence < MIN_CONFIDENCE
+
+      decision_sym = decision == "confirmed" ? :confirmed : :cancelled
+      Result.new(value:         decision_sym,
+                 input_tokens:  result[:input_tokens],
+                 output_tokens: result[:output_tokens],
+                 model:         result[:model])
+    rescue Llm::Client::Error => e
+      Rails.logger.warn "[Llm::NluParser] parse_confirmation failed: #{e.message}"
       nil
     end
 

@@ -142,4 +142,95 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
       end
     end
   end
+
+  # ─── confirm_booking ────────────────────────────────────────────────────────
+
+  describe "confirm_booking" do
+    before do
+      user  # ensure a staff member exists for create_booking
+      conversation.update!(
+        step:               "confirming_booking",
+        service:            service,
+        requested_starts_at: 1.day.from_now
+      )
+    end
+
+    it "creates a booking and completes the conversation when body is '1'" do
+      expect(Llm::NluParser).not_to receive(:parse_confirmation)
+
+      result = call(body: "1", step: "confirming_booking")
+
+      expect(result).to be_success
+      expect(result.value!).to be_a(Booking)
+      expect(conversation.reload.step).to eq("completed")
+    end
+
+    it "cancels the conversation when body is '2'" do
+      expect(Llm::NluParser).not_to receive(:parse_confirmation)
+
+      result = call(body: "2", step: "confirming_booking")
+
+      expect(result).to be_success.and(have_attributes(value!: :cancelled))
+      expect(conversation.reload.step).to eq("cancelled")
+    end
+
+    context "when ai_nlu_enabled is false and body is unrecognized" do
+      it "re-prompts without calling the LLM" do
+        expect(Llm::NluParser).not_to receive(:parse_confirmation)
+
+        result = call(body: "dale", step: "confirming_booking")
+
+        expect(result).to be_success.and(have_attributes(value!: :confirming_booking))
+        expect(conversation.reload.step).to eq("confirming_booking")
+      end
+    end
+
+    context "when ai_nlu_enabled is true" do
+      before { account.update!(ai_nlu_enabled: true) }
+
+      let(:confirmed_nlu) do
+        Llm::NluParser::Result.new(value: :confirmed, input_tokens: 60, output_tokens: 10,
+                                   model: Llm::Client::DEFAULT_MODEL)
+      end
+
+      let(:cancelled_nlu) do
+        Llm::NluParser::Result.new(value: :cancelled, input_tokens: 60, output_tokens: 10,
+                                   model: Llm::Client::DEFAULT_MODEL)
+      end
+
+      it "creates a booking when the NLU parser returns :confirmed" do
+        allow(Llm::NluParser).to receive(:parse_confirmation).and_return(confirmed_nlu)
+
+        result = call(body: "dale", step: "confirming_booking")
+
+        expect(result).to be_success
+        expect(result.value!).to be_a(Booking)
+        expect(conversation.reload.step).to eq("completed")
+      end
+
+      it "cancels when the NLU parser returns :cancelled" do
+        allow(Llm::NluParser).to receive(:parse_confirmation).and_return(cancelled_nlu)
+
+        result = call(body: "mejor no", step: "confirming_booking")
+
+        expect(result).to be_success.and(have_attributes(value!: :cancelled))
+        expect(conversation.reload.step).to eq("cancelled")
+      end
+
+      it "re-prompts when the NLU parser returns nil (uncertain input)" do
+        allow(Llm::NluParser).to receive(:parse_confirmation).and_return(nil)
+
+        result = call(body: "¿cómo?", step: "confirming_booking")
+
+        expect(result).to be_success.and(have_attributes(value!: :confirming_booking))
+        expect(conversation.reload.step).to eq("confirming_booking")
+      end
+
+      it "does not call the LLM when body is already '1' or '2'" do
+        expect(Llm::NluParser).not_to receive(:parse_confirmation)
+
+        call(body: "1", step: "confirming_booking")
+      end
+    end
+  end
 end

@@ -117,4 +117,58 @@ RSpec.describe Llm::NluParser do
       end
     end
   end
+
+  describe ".parse_confirmation" do
+    context "when the LLM returns high-confidence 'confirmed'" do
+      before { stub_client(content: { "decision" => "confirmed", "confidence" => 0.97 }) }
+
+      it "returns a Result with value :confirmed" do
+        result = described_class.parse_confirmation("dale", account: account)
+
+        expect(result).to be_a(Llm::NluParser::Result)
+        expect(result.value).to eq(:confirmed)
+      end
+
+      it "includes token usage" do
+        result = described_class.parse_confirmation("claro que sí", account: account)
+
+        expect(result.input_tokens).to eq(100)
+        expect(result.output_tokens).to eq(20)
+      end
+    end
+
+    context "when the LLM returns high-confidence 'cancelled'" do
+      before { stub_client(content: { "decision" => "cancelled", "confidence" => 0.91 }) }
+
+      it "returns a Result with value :cancelled" do
+        result = described_class.parse_confirmation("mejor no", account: account)
+
+        expect(result.value).to eq(:cancelled)
+      end
+    end
+
+    context "when the LLM returns low confidence" do
+      before { stub_client(content: { "decision" => "confirmed", "confidence" => 0.5 }) }
+
+      it "returns nil" do
+        expect(described_class.parse_confirmation("quizás", account: account)).to be_nil
+      end
+    end
+
+    context "when the LLM returns null decision" do
+      before { stub_client(content: { "decision" => nil, "confidence" => 0.9 }) }
+
+      it "returns nil" do
+        expect(described_class.parse_confirmation("???", account: account)).to be_nil
+      end
+    end
+
+    context "when the LLM call raises an error" do
+      before { allow(Llm::Client).to receive(:call).and_raise(Llm::Client::Error, "timeout") }
+
+      it "returns nil without raising" do
+        expect(described_class.parse_confirmation("dale", account: account)).to be_nil
+      end
+    end
+  end
 end

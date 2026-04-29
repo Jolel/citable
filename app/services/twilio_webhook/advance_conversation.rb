@@ -100,8 +100,30 @@ module TwilioWebhook
     end
 
     def confirm_booking
+      decision = rigid_decision || nlu_decision
+      apply_decision(decision)
+    end
+
+    def rigid_decision
       case body
-      when "1"
+      when "1" then :confirmed
+      when "2" then :cancelled
+      end
+    end
+
+    def nlu_decision
+      return unless account.ai_nlu_enabled?
+
+      nlu = Llm::NluParser.parse_confirmation(body, account: account)
+      return unless nlu
+
+      record_ai_usage(nlu)
+      nlu.value
+    end
+
+    def apply_decision(decision)
+      case decision
+      when :confirmed
         booking = create_booking
         conversation.update!(booking: booking)
         conversation.complete!
@@ -111,7 +133,7 @@ module TwilioWebhook
           booking: booking
         )
         Success(booking)
-      when "2"
+      when :cancelled
         conversation.update!(step: "cancelled")
         send_message("Sin problema, cancelé esta solicitud. Escríbenos de nuevo cuando quieras reservar.", customer: conversation.customer)
         Success(:cancelled)
@@ -146,12 +168,10 @@ module TwilioWebhook
       nil
     end
 
+    # Stamps AI token usage onto the most recent inbound log for the account.
+    # nlu_result responds to: input_tokens, output_tokens, model.
     def record_ai_usage(nlu_result)
-      log = account.message_logs
-                   .inbound
-                   .where(customer: conversation.customer)
-                   .order(:created_at)
-                   .last
+      log = account.message_logs.inbound.order(:created_at).last
       log&.update_columns(
         ai_input_tokens:  nlu_result.input_tokens,
         ai_output_tokens: nlu_result.output_tokens,
