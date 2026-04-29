@@ -41,8 +41,16 @@ module TwilioWebhook
     end
 
     def collect_service
-      idx = service_index
+      idx     = service_index
       service = idx && idx >= 0 ? active_services[idx] : nil
+
+      if service.nil? && account.ai_nlu_enabled?
+        nlu = Llm::NluParser.parse_service(body, active_services, account: account)
+        if nlu
+          record_ai_usage(nlu)
+          service = nlu.value
+        end
+      end
 
       unless service
         send_service_prompt(prefix: "No encontré esa opción. Por favor elige un servicio:")
@@ -59,6 +67,14 @@ module TwilioWebhook
 
     def collect_datetime
       starts_at = parse_datetime(body)
+
+      if starts_at.nil? && account.ai_nlu_enabled?
+        nlu = Llm::NluParser.parse_datetime(body, account: account)
+        if nlu
+          record_ai_usage(nlu)
+          starts_at = nlu.value
+        end
+      end
 
       unless starts_at
         send_message("No pude entender la fecha. Intenta con 2026-04-26 15:00 o 26/04/2026 15:00.", customer: conversation.customer)
@@ -128,6 +144,19 @@ module TwilioWebhook
       Integer(body) - 1
     rescue ArgumentError, TypeError
       nil
+    end
+
+    def record_ai_usage(nlu_result)
+      log = account.message_logs
+                   .inbound
+                   .where(customer: conversation.customer)
+                   .order(:created_at)
+                   .last
+      log&.update_columns(
+        ai_input_tokens:  nlu_result.input_tokens,
+        ai_output_tokens: nlu_result.output_tokens,
+        ai_model:         nlu_result.model
+      )
     end
 
     def parse_datetime(value)

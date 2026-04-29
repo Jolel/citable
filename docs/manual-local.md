@@ -19,8 +19,9 @@ By the end, you should be able to:
 5. Confirm that the booking appears in Google Calendar.
 6. Send a WhatsApp confirmation through Twilio.
 7. Receive a WhatsApp reply through the Twilio webhook.
+8. Send a free-text date such as "el viernes a las 3" and have the AI NLU parser resolve it to a real datetime.
 
-Twilio is required only for WhatsApp testing. You can run the app and test Google Calendar without it.
+Twilio is required only for WhatsApp testing. A Gemini API key is required only for AI NLU testing. You can run the app and test Google Calendar without either.
 
 ---
 
@@ -36,6 +37,7 @@ Twilio is required only for WhatsApp testing. You can run the app and test Googl
 | A Twilio account | WhatsApp send/reply testing | n/a |
 | A WhatsApp-capable phone | Joining the Twilio WhatsApp Sandbox | n/a |
 | ngrok or another HTTPS tunnel | Receiving Twilio webhooks locally | `ngrok version` |
+| A Google AI Studio / Gemini API key | AI NLU free-text parsing | n/a |
 
 The app stores Google and Twilio secrets in Rails encrypted credentials. You need `config/master.key` from the project owner before you can edit or read those credentials.
 
@@ -113,7 +115,7 @@ Open credentials:
 EDITOR=nano bin/rails credentials:edit
 ```
 
-Add the Google and Twilio sections shown below. Replace every placeholder with the real value.
+Add the Google, Twilio, and Gemini sections shown below. Replace every placeholder with the real value.
 
 ```yaml
 google:
@@ -124,6 +126,9 @@ twilio:
   account_sid: "PASTE_TWILIO_ACCOUNT_SID_HERE"
   auth_token: "PASTE_TWILIO_AUTH_TOKEN_HERE"
   whatsapp_number: "+14155238886"
+
+gemini:
+  api_key: "PASTE_GEMINI_API_KEY_HERE"
 ```
 
 For nano, save and exit with **Ctrl + X**, then **Y**, then **Enter**.
@@ -134,6 +139,7 @@ Credential notes:
 - `twilio.account_sid` and `twilio.auth_token` come from the Twilio Console.
 - `twilio.whatsapp_number` must be the WhatsApp sender number without the `whatsapp:` prefix.
 - For the Twilio WhatsApp Sandbox, the sender is usually `+14155238886`.
+- `gemini.api_key` is used only when `Account#ai_nlu_enabled` is true. Without it the app falls back to the strict date/service parser. Get a key at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) — the free tier is sufficient for local testing.
 
 ---
 
@@ -285,11 +291,11 @@ To test outbound WhatsApp:
 
 ### Inbound guided booking flow
 
-The app now supports a full guided booking flow over WhatsApp. When a customer messages the business WhatsApp number, the app walks them through:
+The app supports a full guided booking flow over WhatsApp. When a customer messages the business WhatsApp number, the app walks them through:
 
 1. **Name** — collected once for new customers.
 2. **Service selection** — numbered list of active services.
-3. **Date and time** — customer enters free text in formats like `2026-04-26 15:00`, `26/04/2026 15:00`, or `mañana 15:00`.
+3. **Date and time** — customer enters a date and time.
 4. **Address** — only asked if the selected service requires it.
 5. **Confirmation** — customer replies `1` to confirm or `2` to cancel.
 
@@ -310,6 +316,35 @@ Expected result:
 - After confirmation (`1`), a booking is created with status `pending` and assigned to the first available staff member.
 - At each step, the app replies with the next prompt via `Whatsapp::MessageSender`.
 
+### AI NLU — free-text date and service parsing
+
+The seeded "Estudio de Ana" account has `ai_nlu_enabled: true`, which activates the Gemini 2.0 Flash NLU fallback. When enabled:
+
+- **Service step:** if the customer types a service name instead of a number (e.g. `quiero un corte`), the LLM matches it to the closest active service with ≥ 0.8 confidence. Below that threshold, or if the Gemini key is missing, the app re-prompts with the numbered list as before.
+- **Date/time step:** if the customer sends a natural-language date (e.g. `el viernes a las 3`, `mañana por la tarde a las 5`, `el próximo lunes a las 10am`), the LLM parses it to an ISO 8601 datetime. The same 0.8 confidence threshold and silent fallback apply.
+- The LLM call has a 4-second timeout and falls back to the strict FSM parser on any error — the conversation never breaks.
+
+**Enabling or disabling AI NLU for an account:**
+
+```ruby
+# Rails console
+account = Account.find_by(name: "Estudio de Ana")
+account.update!(ai_nlu_enabled: true)   # enable
+account.update!(ai_nlu_enabled: false)  # disable (strict parser only)
+```
+
+**Inspecting token usage:**
+
+After an NLU-assisted turn, the most recent inbound `MessageLog` for that customer stores the token counts:
+
+```ruby
+account = Account.find_by(name: "Estudio de Ana")
+account.message_logs.inbound.where.not(ai_model: nil).last
+# => #<MessageLog ai_model: "gemini-2.0-flash", ai_input_tokens: 130, ai_output_tokens: 22>
+```
+
+**Skipping AI NLU locally:** if you do not add a `gemini.api_key` credential, `Llm::Client::Error` is rescued silently and the strict parser handles every turn exactly as before. You do not need a Gemini key to run the app or test the rest of the booking flow.
+
 ### Existing confirm/cancel flow
 
 Customers with an active upcoming booking who message the Sandbox number still get the legacy confirm/cancel flow — the guided booking flow only starts if there is no active upcoming booking for that customer.
@@ -329,8 +364,11 @@ Customers with an active upcoming booking who message the Sandbox number still g
 | Reset database and seed data | `bin/setup --reset --skip-server` |
 | Open Rails console | `bin/rails console` |
 | List routes | `bin/rails routes` |
-| Run test suite | `bundle exec rspec` |
+| Run test suite | `bin/rspec` |
+| Run full CI locally | `bin/ci` |
 | Tail development log | `tail -f log/development.log` |
+| Check AI token usage | `MessageLog.where.not(ai_model: nil).sum(:ai_input_tokens)` (in Rails console) |
+| Toggle AI NLU for Ana's account | `Account.find_by(name: "Estudio de Ana").update!(ai_nlu_enabled: true\|false)` (in Rails console) |
 
 ---
 
@@ -409,6 +447,18 @@ The app rejected the Twilio signature. Confirm:
 - The Twilio Sandbox webhook URL exactly matches the ngrok HTTPS URL plus `/webhooks/twilio`.
 - The webhook method is `POST`.
 - You did not restart ngrok without updating the Twilio webhook URL.
+
+### AI NLU does not parse free-text dates or services
+
+Check in order:
+
+1. Confirm `ai_nlu_enabled` is true for the account:
+   ```ruby
+   Account.find_by(name: "Estudio de Ana").ai_nlu_enabled? # => true
+   ```
+2. Confirm the `gemini.api_key` credential is set and `bin/dev` was restarted after editing credentials.
+3. Check `log/development.log` for lines starting with `[Llm::NluParser]`. A warn line means the LLM call failed or returned low confidence; the strict parser took over.
+4. If the key is missing, the log shows `Gemini API key not configured` and the strict parser handles the turn silently. No action is needed unless you want NLU active.
 
 ---
 

@@ -25,6 +25,7 @@
 - [x] Seeds with "Ana" persona data
 - [x] Google OAuth2 + Calendar sync (11 migrations total; `Dashboard::GoogleOauthController` — manual Signet flow, no OmniAuth)
 - [x] `RenewGoogleWatchJob` — daily job renewing push channels before Google's 7-day expiry
+- [x] **AI NLU Phase 1** — `Llm::Client` (Gemini 2.0 Flash REST wrapper), `Llm::NluParser` (parse_datetime + parse_service), LLM fallback wired into `TwilioWebhook::AdvanceConversation`. Feature-flagged via `Account#ai_nlu_enabled`. Token usage tracked in `message_logs` (ai_input_tokens, ai_output_tokens, ai_model). WebMock added to test suite; 26 new specs.
 
 ## What Needs to Be Done
 
