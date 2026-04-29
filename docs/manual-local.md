@@ -20,6 +20,7 @@ By the end, you should be able to:
 6. Send a WhatsApp confirmation through Twilio.
 7. Receive a WhatsApp reply through the Twilio webhook.
 8. Send a free-text date such as "el viernes a las 3" and have the AI NLU parser resolve it to a real datetime.
+9. Receive a personalized AI-generated greeting when a conversation starts, and confirm "dale" or "sí" are accepted at the confirmation step.
 
 Twilio is required only for WhatsApp testing. A Gemini API key is required only for AI NLU testing. You can run the app and test Google Calendar without either.
 
@@ -329,35 +330,55 @@ Expected result:
 - After confirmation (`1`), a booking is created with status `pending` and assigned to the first available staff member.
 - At each step, the app replies with the next prompt via `Whatsapp::MessageSender`.
 
-### AI NLU — free-text date and service parsing
+### AI — greeting generation, NLU parsing, and confirmation
 
-The seeded "Estudio de Ana" account has `ai_nlu_enabled: true`, which activates the Gemini 2.0 Flash NLU fallback. When enabled:
+The seeded "Estudio de Ana" account has `ai_nlu_enabled: true`, which activates all Gemini 2.0 Flash AI features. When enabled, three stages of the conversation are enhanced:
+
+**1. Conversation start — personalised greeting (`Llm::GreetingGenerator`)**
+
+When a customer messages the business number for the first time, instead of the hardcoded "¡Hola! Para reservar tu cita…" prompt, the app calls `Llm::GreetingGenerator`. It generates a short, warm message in Mexican Spanish tailored to the business name and, for returning customers, to their name and the available services. New customers get a friendly name request; known customers get a greeting plus the numbered service list so they can still reply "1" or type the service name freely.
+
+Fallback: if the Gemini key is missing, the LLM call raises `Llm::Client::Error` (rescued silently) and the hardcoded prompts are used exactly as before.
+
+**2. Service and date/time steps — NLU parsing (`Llm::NluParser`)**
 
 - **Service step:** if the customer types a service name instead of a number (e.g. `quiero un corte`), the LLM matches it to the closest active service with ≥ 0.8 confidence. Below that threshold, or if the Gemini key is missing, the app re-prompts with the numbered list as before.
 - **Date/time step:** if the customer sends a natural-language date (e.g. `el viernes a las 3`, `mañana por la tarde a las 5`, `el próximo lunes a las 10am`), the LLM parses it to an ISO 8601 datetime. The same 0.8 confidence threshold and silent fallback apply.
-- The LLM call has a 4-second timeout and falls back to the strict FSM parser on any error — the conversation never breaks.
 
-**Enabling or disabling AI NLU for an account:**
+**3. Confirmation step — natural-language acceptance (`Llm::NluParser.parse_confirmation`)**
+
+At the final confirmation prompt the bot previously only accepted `1` (confirm) or `2` (cancel). With `ai_nlu_enabled`, it also accepts conversational replies:
+
+| Customer says | Interpreted as |
+|---|---|
+| `dale`, `sí`, `claro`, `va`, `ok`, `perfecto`, `confirmo` | Confirmed |
+| `no`, `mejor no`, `cancela`, `no puedo`, `no gracias` | Cancelled |
+
+Rigid `1` / `2` are tried first; the LLM only fires for anything else. Below 0.8 confidence the bot re-prompts with "Responde 1 para confirmar o 2 para cancelar."
+
+All three LLM calls share the same 4-second timeout and silent fallback — the conversation never breaks if the Gemini API is slow or unavailable.
+
+**Enabling or disabling AI for an account:**
 
 ```ruby
 # Rails console
 account = Account.find_by(name: "Estudio de Ana")
-account.update!(ai_nlu_enabled: true)   # enable
-account.update!(ai_nlu_enabled: false)  # disable (strict parser only)
+account.update!(ai_nlu_enabled: true)   # enable all AI features
+account.update!(ai_nlu_enabled: false)  # disable — strict FSM only
 ```
 
 **Inspecting token usage:**
 
-After an NLU-assisted turn, the most recent inbound `MessageLog` for that customer stores the token counts:
+After any AI-assisted turn, the most recent inbound `MessageLog` for that account stores the token counts:
 
 ```ruby
 account = Account.find_by(name: "Estudio de Ana")
 account.message_logs.inbound.where.not(ai_model: nil).last
 # => #<MessageLog ai_model: "gemini-2.0-flash", ai_input_tokens: 130, ai_output_tokens: 22>
-# (ai_model reflects whichever model is configured in credentials.gemini.model)
+# (ai_model reflects whichever model is set in credentials.gemini.model)
 ```
 
-**Skipping AI NLU locally:** if you do not add a `gemini.api_key` credential, `Llm::Client::Error` is rescued silently and the strict parser handles every turn exactly as before. You do not need a Gemini key to run the app or test the rest of the booking flow.
+**Skipping AI locally:** if you do not add a `gemini.api_key` credential, all three AI features raise `Llm::Client::Error` internally and fall back silently. You do not need a Gemini key to run the app or test any other part of the booking flow.
 
 ### Existing confirm/cancel flow
 
@@ -382,7 +403,8 @@ Customers with an active upcoming booking who message the Sandbox number still g
 | Run full CI locally | `bin/ci` |
 | Tail development log | `tail -f log/development.log` |
 | Check AI token usage | `MessageLog.where.not(ai_model: nil).sum(:ai_input_tokens)` (in Rails console) |
-| Toggle AI NLU for Ana's account | `Account.find_by(name: "Estudio de Ana").update!(ai_nlu_enabled: true\|false)` (in Rails console) |
+| Inspect last AI-assisted log | `Account.find_by(name: "Estudio de Ana").message_logs.inbound.where.not(ai_model: nil).last` (in Rails console) |
+| Toggle all AI features for Ana's account | `Account.find_by(name: "Estudio de Ana").update!(ai_nlu_enabled: true\|false)` (in Rails console) |
 
 ---
 
@@ -462,7 +484,7 @@ The app rejected the Twilio signature. Confirm:
 - The webhook method is `POST`.
 - You did not restart ngrok without updating the Twilio webhook URL.
 
-### AI NLU does not parse free-text dates or services
+### AI features do not activate (no greeting, no free-text parsing)
 
 Check in order:
 
@@ -471,8 +493,20 @@ Check in order:
    Account.find_by(name: "Estudio de Ana").ai_nlu_enabled? # => true
    ```
 2. Confirm the `gemini.api_key` credential is set and `bin/dev` was restarted after editing credentials.
-3. Check `log/development.log` for lines starting with `[Llm::NluParser]`. A warn line means the LLM call failed or returned low confidence; the strict parser took over.
-4. If the key is missing, the log shows `Gemini API key not configured` and the strict parser handles the turn silently. No action is needed unless you want NLU active.
+3. Check `log/development.log` for lines starting with `[Llm::GreetingGenerator]` or `[Llm::NluParser]`. A `WARN` line means the LLM call failed or returned low confidence and the fallback took over.
+4. If the key is missing entirely, the log shows `Gemini API key not configured` and every AI step falls back silently. No action is needed unless you want the AI features active.
+
+**AI greeting is not personalised / falls back to hardcoded prompt:**
+
+- Check that `ai_nlu_enabled` is true *and* a valid `gemini.api_key` is set.
+- Check `log/development.log` for `[Llm::GreetingGenerator] …` warn lines.
+- A blank response from Gemini also triggers the fallback. This can happen on the free tier under load.
+
+**"dale" / "sí" not accepted at the confirmation step:**
+
+- Confirm `ai_nlu_enabled` is true.
+- Check `log/development.log` for `[Llm::NluParser] parse_confirmation failed` lines.
+- If Gemini returns low confidence (< 0.8), the bot re-prompts with "Responde 1 para confirmar o 2 para cancelar." — `1` and `2` always work regardless of AI status.
 
 ---
 
