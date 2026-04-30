@@ -114,6 +114,28 @@ RSpec.describe TwilioWebhook::StartConversation do
         )
       end
 
+      it "prepends the LLM intro to the Rails-formatted service list" do
+        allow(Llm::GreetingGenerator).to receive(:call)
+          .and_return(build_greeting_result("¡Hola, María! 👋"))
+
+        call(customer: customer)
+
+        # MessageSender logs the body in an outbound MessageLog on every send.
+        body = account.message_logs.outbound.order(:created_at).last.body
+        expect(body).to start_with("¡Hola, María! 👋\n")
+        expect(body).to include("1. Corte de cabello")
+      end
+
+      it "sends only the service list when GreetingGenerator returns nil" do
+        allow(Llm::GreetingGenerator).to receive(:call).and_return(nil)
+
+        call(customer: customer)
+
+        body = account.message_logs.outbound.order(:created_at).last.body
+        expect(body).to start_with("Elige un servicio:")
+        expect(body).to include("1. Corte de cabello")
+      end
+
       it "succeeds even when GreetingGenerator returns nil (fallback path)" do
         allow(Llm::GreetingGenerator).to receive(:call).and_return(nil)
 

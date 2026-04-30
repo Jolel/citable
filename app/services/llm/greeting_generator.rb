@@ -1,12 +1,15 @@
 # frozen_string_literal: true
 
 module Llm
-  # Generates a warm, context-aware WhatsApp opening message in Mexican Spanish.
-  # Used by TwilioWebhook::StartConversation when a new conversation begins.
+  # Generates the conversational intro text for a new WhatsApp conversation.
+  # Used by TwilioWebhook::StartConversation.
   #
-  # For a known customer: personalized greeting + numbered service list so the
-  # customer can still reply "1" or type the service name freely.
-  # For a new customer:   short welcome + ask for their name.
+  # Intentionally generates ONLY the greeting sentence(s) — not the service list.
+  # The caller (StartConversation) appends the Rails-formatted numbered list so
+  # that line breaks are guaranteed regardless of what the LLM returns.
+  #
+  # For a known customer: short personalised greeting (1–2 sentences).
+  # For a new customer:   short welcome + ask for their full name.
   #
   # Returns Result or nil (caller must supply a hardcoded fallback).
   class GreetingGenerator
@@ -18,7 +21,7 @@ module Llm
       type: "object",
       properties: {
         message: { type: "string",
-                   description: "WhatsApp message in Mexican Spanish, 3–4 lines max" }
+                   description: "Short greeting in Mexican Spanish, 1–2 sentences only. Do NOT include a service list." }
       },
       required: %w[message]
     }.freeze
@@ -51,29 +54,20 @@ module Llm
     def system_prompt(account)
       <<~PROMPT.strip
         Eres la recepcionista virtual de "#{account.name}" en WhatsApp.
-        Respondes en español mexicano con trato amable y cercano.
-        Tu único rol es ayudar a agendar, modificar o cancelar citas.
-        Mantén el mensaje breve (máx. 4 líneas). Usa emojis con moderación (1 como mucho).
+        Respondes en español mexicano con trato amable y cercano (tuteo).
+        Escribe SOLO el saludo inicial — máx. 2 oraciones. Sin listas, sin opciones.
+        Usa un emoji como mucho.
       PROMPT
     end
 
     def user_prompt(customer:, account:)
       if customer
-        services = numbered_services(account)
-        <<~PROMPT.strip
-          El cliente se llama #{customer.name}. Escribe un saludo personalizado y luego muestra
-          esta lista de servicios exactamente como aparece para que elija:
-          #{services}
-        PROMPT
+        "El cliente se llama #{customer.name}. Escribe un saludo corto y personalizado. " \
+          "No incluyas la lista de servicios; se agrega automáticamente después."
       else
-        "Es un cliente nuevo. Escribe un saludo de bienvenida a #{account.name} y pide su nombre completo."
+        "Es un cliente nuevo de #{account.name}. " \
+          "Escribe un saludo de bienvenida breve y pide su nombre completo."
       end
-    end
-
-    def numbered_services(account)
-      account.services.active.order(:name).each_with_index.map do |svc, i|
-        "#{i + 1}. #{svc.name} (#{svc.duration_label})"
-      end.join("\n")
     end
   end
 end

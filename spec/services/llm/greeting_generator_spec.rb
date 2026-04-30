@@ -18,14 +18,16 @@ RSpec.describe Llm::GreetingGenerator do
   before { create(:service, account: account, name: "Corte de cabello") }
 
   describe ".call" do
-    context "when the LLM returns a message" do
-      before { stub_client(message: "¡Hola, María! ¿Qué servicio quieres hoy?") }
+    context "when the LLM returns a greeting intro" do
+      # GreetingGenerator returns ONLY the intro sentence(s) — no service list.
+      # StartConversation is responsible for appending the list.
+      before { stub_client(message: "¡Hola, María! ¿Qué tal?") }
 
-      it "returns a Result with the message" do
+      it "returns a Result with the LLM message" do
         result = described_class.call(account: account, customer: customer)
 
         expect(result).to be_a(Llm::GreetingGenerator::Result)
-        expect(result.message).to eq("¡Hola, María! ¿Qué servicio quieres hoy?")
+        expect(result.message).to eq("¡Hola, María! ¿Qué tal?")
       end
 
       it "includes token usage metadata" do
@@ -41,6 +43,14 @@ RSpec.describe Llm::GreetingGenerator do
 
         expect(Llm::Client).to have_received(:call).with(
           hash_including(system: include("Estudio de Ana"))
+        )
+      end
+
+      it "tells the LLM not to include the service list" do
+        described_class.call(account: account, customer: customer)
+
+        expect(Llm::Client).to have_received(:call).with(
+          hash_including(user: include("automáticamente"))
         )
       end
 
@@ -62,7 +72,7 @@ RSpec.describe Llm::GreetingGenerator do
         expect(result.message).to be_present
       end
 
-      it "does not include a customer name in the user prompt" do
+      it "references 'cliente nuevo' in the user prompt" do
         described_class.call(account: account, customer: nil)
 
         expect(Llm::Client).to have_received(:call).with(

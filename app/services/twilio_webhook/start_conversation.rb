@@ -37,10 +37,14 @@ module TwilioWebhook
 
     # ── outbound helpers ──────────────────────────────────────────────────────
 
-    # Known customer: LLM-personalised greeting + numbered service list,
-    # falling back to the plain numbered list when the LLM is off or fails.
+    # Known customer: LLM intro (1–2 sentences) followed by the Rails-formatted
+    # service list. The list is always appended by Rails so line breaks are
+    # guaranteed regardless of LLM output. Falls back to the plain list when
+    # the LLM is off or unavailable.
     def send_service_greeting(conversation, customer)
-      message = llm_greeting(customer: customer) || fallback_service_list
+      intro   = llm_greeting(customer: customer)
+      list    = fallback_service_list
+      message = intro ? "#{intro}\n#{list}" : list
       send_message(message, conversation: conversation, customer: customer)
     end
 

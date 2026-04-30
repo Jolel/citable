@@ -58,10 +58,7 @@ module TwilioWebhook
       end
 
       conversation.update!(service: service, step: "awaiting_datetime")
-      send_message(
-        "Perfecto. ¿Qué fecha y hora quieres? Ejemplos: 2026-04-26 15:00, 26/04/2026 15:00 o mañana 15:00.",
-        customer: conversation.customer
-      )
+      send_message(datetime_prompt, customer: conversation.customer)
       Success(:awaiting_datetime)
     end
 
@@ -77,7 +74,7 @@ module TwilioWebhook
       end
 
       unless starts_at
-        send_message("No pude entender la fecha. Intenta con 2026-04-26 15:00 o 26/04/2026 15:00.", customer: conversation.customer)
+        send_message(datetime_reprompt, customer: conversation.customer)
         return Success(:awaiting_datetime)
       end
 
@@ -138,7 +135,7 @@ module TwilioWebhook
         send_message("Sin problema, cancelé esta solicitud. Escríbenos de nuevo cuando quieras reservar.", customer: conversation.customer)
         Success(:cancelled)
       else
-        send_confirmation_prompt(prefix: "Responde 1 para confirmar o 2 para cancelar.")
+        send_confirmation_prompt(prefix: confirmation_hint)
         Success(:confirming_booking)
       end
     end
@@ -179,6 +176,38 @@ module TwilioWebhook
       )
     end
 
+    # ── prompt text helpers ───────────────────────────────────────────────────
+
+    def datetime_prompt
+      if account.ai_nlu_enabled?
+        "¿Para cuándo quieres tu cita? Puedes escribirlo como quieras, " \
+          "por ejemplo: el viernes a las 3, mañana a las 10am, el lunes próximo a las 5pm."
+      else
+        "Perfecto. ¿Qué fecha y hora quieres? " \
+          "Ejemplos: #{Time.zone.today.strftime("%Y-%m-%d")} 15:00, " \
+          "#{Time.zone.today.strftime("%d/%m/%Y")} 15:00 o mañana 15:00."
+      end
+    end
+
+    def datetime_reprompt
+      if account.ai_nlu_enabled?
+        "No pude entender la fecha. ¿Puedes escribirla de otra forma? " \
+          "Por ejemplo: el viernes a las 3, mañana a las 10am, el próximo lunes."
+      else
+        "No pude entender la fecha. " \
+          "Intenta con #{Time.zone.today.strftime("%Y-%m-%d")} 15:00 " \
+          "o #{Time.zone.today.strftime("%d/%m/%Y")} 15:00."
+      end
+    end
+
+    def confirmation_hint
+      if account.ai_nlu_enabled?
+        "Responde 1 o escribe sí para confirmar, 2 o no para cancelar."
+      else
+        "Responde 1 para confirmar o 2 para cancelar."
+      end
+    end
+
     def parse_datetime(value)
       text = value.to_s.strip.downcase
 
@@ -211,7 +240,7 @@ module TwilioWebhook
       lines << "Confirma tu cita:"
       lines << "#{conversation.service.name} - #{starts_at}"
       lines << "Dirección: #{conversation.address}" if conversation.address.present?
-      lines << "Responde 1 para confirmar o 2 para cancelar."
+      lines << confirmation_hint
       send_message(lines.join("\n"), customer: conversation.customer)
     end
 
