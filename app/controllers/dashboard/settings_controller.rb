@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Dashboard::SettingsController < Dashboard::BaseController
+  include Dashboard::OwnerOnly
+
   before_action :require_owner!
 
   def show
@@ -10,7 +12,7 @@ class Dashboard::SettingsController < Dashboard::BaseController
   def update
     @account = current_account
     if @account.update(account_params)
-      redirect_to dashboard_settings_path, notice: "Configuraci\u00F3n guardada."
+      redirect_to dashboard_settings_path, notice: "Configuración guardada."
     else
       render :show, status: :unprocessable_entity
     end
@@ -20,9 +22,5 @@ class Dashboard::SettingsController < Dashboard::BaseController
 
   def account_params
     params.require(:account).permit(:name, :timezone)
-  end
-
-  def require_owner!
-    redirect_to dashboard_bookings_path, alert: "Acceso restringido." unless current_user.owner?
   end
 end

@@ -4,6 +4,8 @@ module GoogleOauth
   class VerifyStateToken
     include Dry::Monads[:result]
 
+    MAX_STATE_AGE = 10.minutes
+
     def self.call(...)
       new.call(...)
     end
@@ -16,7 +18,19 @@ module GoogleOauth
       end
 
       data = JSON.parse(Base64.strict_decode64(payload_b64))
-      Success(user_id: data["user_id"], return_to: data["return_to"])
+      iat  = data["iat"]
+
+      if iat.is_a?(Integer) && Time.now.to_i - iat > MAX_STATE_AGE.to_i
+        return Failure(:state_expired)
+      end
+
+      Success(
+        user_id:      data["user_id"],
+        return_to:    data["return_to"],
+        initiator_id: data["initiator_id"],
+        nonce:        data["nonce"],
+        iat:          iat
+      )
     rescue ArgumentError, JSON::ParserError => e
       Rails.logger.error "[GoogleOauth::VerifyStateToken] #{e.message}"
       Failure(:invalid_state)

@@ -13,8 +13,13 @@ module GoogleOauth
       new.call(...)
     end
 
-    def call(user_id:, redirect_uri:, return_to: nil, oauth: nil)
-      BuildStateToken.call(user_id: user_id, return_to: return_to).bind do |state|
+    def call(user_id:, redirect_uri:, initiator_id:, nonce:, return_to: nil, oauth: nil)
+      BuildStateToken.call(
+        user_id:      user_id,
+        return_to:    return_to,
+        initiator_id: initiator_id,
+        nonce:        nonce
+      ).bind do |state|
         adapter = oauth || OauthAdapter.new(redirect_uri: redirect_uri)
         uri     = adapter.authorization_uri(state: state, scopes: SCOPES)
 

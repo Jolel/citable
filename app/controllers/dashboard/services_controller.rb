@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class Dashboard::ServicesController < Dashboard::BaseController
+  include Dashboard::OwnerOnly
+
+  before_action :require_owner!, only: %i[new create edit update deactivate toggle_active]
   before_action :set_service, only: %i[show edit update deactivate toggle_active]
 
   def index

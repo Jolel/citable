@@ -18,6 +18,8 @@ Rails.application.routes.draw do
       member do
         patch :confirm
         patch :cancel
+        patch :mark_completed
+        patch :mark_no_show
       end
     end
 
@@ -29,7 +31,11 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :staff, only: %i[index show new create edit update destroy]
+    resources :staff, only: %i[index show new create edit update destroy] do
+      member do
+        post :reset_password
+      end
+    end
 
     resource :settings, only: %i[show update]
 
@@ -38,7 +44,7 @@ Rails.application.routes.draw do
     end
 
     resource :google_oauth, only: [], controller: "google_oauth" do
-      get    :connect
+      post   :connect
       get    :callback
       delete :disconnect
     end
@@ -50,11 +56,13 @@ Rails.application.routes.draw do
     post "google_calendar", to: "google_calendar#create", as: :google_calendar
   end
 
-  # Public booking pages
+  # Public booking pages — per-tenant via WhatsApp number in path
   scope module: :public do
-    get  "/reservar",                  to: "bookings#new",          as: :public_booking
-    post "/reservar",                  to: "bookings#create"
-    get  "/reservar/confirmada/:id",   to: "bookings#confirmation", as: :public_booking_confirmation
+    scope "/r/:account_whatsapp", constraints: { account_whatsapp: /\d{10,15}/ } do
+      get  "/",                  to: "bookings#new",          as: :public_booking
+      post "/",                  to: "bookings#create"
+      get  "/confirmada/:token", to: "bookings#confirmation", as: :public_booking_confirmation
+    end
   end
 
   # Default root

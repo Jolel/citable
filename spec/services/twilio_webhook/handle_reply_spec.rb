@@ -3,6 +3,10 @@
 require "rails_helper"
 
 RSpec.describe TwilioWebhook::HandleReply do
+  # Several guided-flow examples send the literal "2026-04-26 15:00" prompt;
+  # freeze "now" before that so starts_at_in_future accepts it.
+  around { |ex| travel_to(Time.zone.local(2026, 4, 13, 9, 0)) { ex.run } }
+
   before do
     allow(GoogleCalendarSyncJob).to receive(:perform_later)
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))
@@ -175,7 +179,7 @@ RSpec.describe TwilioWebhook::HandleReply do
          .and change(Booking, :count).by(1)
 
         customer = account.customers.find_by!(phone: "5215599999999")
-        booking = account.bookings.order(:created_at).last
+        booking = account.bookings.order(:id).last
 
         expect(customer.name).to eq("Rosa Martinez")
         expect(booking.customer).to eq(customer)

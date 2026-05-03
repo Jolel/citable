@@ -23,7 +23,13 @@
     <% end %>
   </div>
 
-  <%= form_with url: public_booking_path, method: :post, class: "space-y-6", data: { booking_flow_target: "form" } do |f| %>
+  <% if flash[:alert].present? %>
+    <div class="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      <%= flash[:alert] %>
+    </div>
+  <% end %>
+
+  <%= form_with url: public_booking_path(account_whatsapp: @account.whatsapp_number), method: :post, class: "space-y-6", data: { booking_flow_target: "form" } do |f| %>
 
     <%# ────── STEP 1: Service selection ────────── %>
     <div data-booking-flow-target="step" data-step-index="1">

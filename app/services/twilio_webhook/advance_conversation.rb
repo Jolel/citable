@@ -117,7 +117,7 @@ module TwilioWebhook
     end
 
     def staff_member
-      account.users.order(Arel.sql("CASE role WHEN 'owner' THEN 0 ELSE 1 END"), :name, :id).first
+      PublicBookings::StaffPicker.call(account: account, service: conversation.service)
     end
 
     def active_services

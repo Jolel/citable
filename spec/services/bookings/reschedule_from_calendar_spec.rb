@@ -3,6 +3,8 @@
 require "rails_helper"
 
 RSpec.describe Bookings::RescheduleFromCalendar do
+  around { |ex| travel_to(Time.zone.local(2026, 4, 13, 9, 0)) { ex.run } }
+
   before do
     allow(GoogleCalendarSyncJob).to receive(:perform_later)
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))

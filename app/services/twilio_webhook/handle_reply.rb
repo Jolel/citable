@@ -21,7 +21,7 @@ module TwilioWebhook
       end
 
       if customer
-        booking = customer.bookings.active.upcoming.first
+        booking = resolve_reply_booking(customer)
         if booking
           log_inbound(customer: customer, booking: booking)
           return ProcessBookingReply.call(booking: booking, body: @body)
@@ -48,6 +48,29 @@ module TwilioWebhook
 
     def find_customer
       account.customers.find_by("regexp_replace(phone, '[^0-9]', '', 'g') = ?", from_phone)
+    end
+
+    REPLY_BINDING_WINDOW = 36.hours
+
+    # Bind a "1" / "2" reply to the booking the business actually messaged
+    # (looked up via the most recent outbound prompt MessageLog) rather than
+    # whatever booking sorts earliest by starts_at — which is the audit's
+    # planted-booking hijack vector.
+    def resolve_reply_booking(customer)
+      recent_id = account.message_logs
+                         .reply_prompts
+                         .where(customer: customer, direction: "outbound")
+                         .where("created_at > ?", REPLY_BINDING_WINDOW.ago)
+                         .order(created_at: :desc)
+                         .limit(1)
+                         .pick(:booking_id)
+
+      if recent_id
+        return account.bookings.active.find_by(id: recent_id)
+      end
+
+      active = customer.bookings.active.upcoming.to_a
+      active.size == 1 ? active.first : nil
     end
 
     def log_inbound(customer: nil, booking: nil)

@@ -5,10 +5,17 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
 
   before_action :set_target_user, only: %i[connect disconnect]
 
-  # GET /dashboard/google_oauth/connect(?user_id=X)
+  # POST /dashboard/google_oauth/connect(?user_id=X)
+  # CSRF-protected POST (was GET) so a victim's session cannot be made to
+  # initiate a flow on the attacker's behalf.
   def connect
+    nonce = SecureRandom.hex(16)
+    session[:google_oauth_nonce] = nonce
+
     result = GoogleOauth::BuildAuthorizationUrl.call(
       user_id:      @target_user.id,
+      initiator_id: current_user.id,
+      nonce:        nonce,
       redirect_uri: callback_dashboard_google_oauth_url,
       return_to:    extract_path(request.referer)
     )
@@ -23,19 +30,30 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
 
   # GET /dashboard/google_oauth/callback
   def callback
+    nonce = session.delete(:google_oauth_nonce)
+
     result = GoogleOauth::HandleCallback.call(
-      state:        params[:state],
-      code:         params[:code],
-      redirect_uri: callback_dashboard_google_oauth_url,
-      webhook_url:  production_webhook_url,
-      account:      current_account,
-      current_user: current_user
+      state:         params[:state],
+      code:          params[:code],
+      redirect_uri:  callback_dashboard_google_oauth_url,
+      webhook_url:   production_webhook_url,
+      account:       current_account,
+      current_user:  current_user,
+      session_nonce: nonce
     )
 
     case result
     in Success[ { user:, return_to: } ]
       redirect_to extract_path(return_to) || dashboard_staff_path(user), notice: t(".connected")
     in Failure[ :invalid_state ]
+      redirect_to dashboard_root_path, alert: t(".invalid_state")
+    in Failure[ :state_expired ]
+      redirect_to dashboard_root_path, alert: t(".invalid_state")
+    in Failure[ :state_initiator_mismatch ]
+      Rails.logger.warn "[GoogleOauthController#callback] state_initiator_mismatch user=#{current_user.id}"
+      redirect_to dashboard_root_path, alert: t(".invalid_state")
+    in Failure[ :state_nonce_mismatch ]
+      Rails.logger.warn "[GoogleOauthController#callback] state_nonce_mismatch user=#{current_user.id}"
       redirect_to dashboard_root_path, alert: t(".invalid_state")
     in Failure[ :user_not_found ]
       redirect_to dashboard_root_path, alert: t(".user_not_found")
@@ -80,9 +98,15 @@ class Dashboard::GoogleOauthController < Dashboard::BaseController
     webhooks_google_calendar_url(host: request.host_with_port, protocol: request.protocol)
   end
 
+  # Constrain return_to to relative dashboard paths only — defense against an
+  # open redirect if a state token's return_to leaks or is replayed cross-host.
   def extract_path(url)
     return nil if url.blank?
-    URI.parse(url).path.presence
+    parsed = URI.parse(url)
+    path = parsed.path.presence
+    return nil unless path
+    return nil unless path.start_with?("/dashboard/", "/dashboard")
+    path
   rescue URI::InvalidURIError
     nil
   end

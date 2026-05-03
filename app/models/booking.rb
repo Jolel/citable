@@ -9,6 +9,8 @@ class Booking < ApplicationRecord
   has_many :message_logs, dependent: :destroy
   has_many :reminder_schedules, dependent: :destroy
 
+  has_secure_token :confirmation_token, length: 32
+
   attr_accessor :skip_google_sync
 
   enum :status, {
@@ -30,8 +32,10 @@ class Booking < ApplicationRecord
   validates :ends_at, presence: true
   validates :status, presence: true
   validates :deposit_state, presence: true
-  validate :ends_at_after_starts_at
-  validate :address_required_for_service
+  validate  :ends_at_after_starts_at
+  validate  :address_required_for_service
+  validate  :starts_at_in_future, on: :create
+  validate  :associations_share_account
 
   scope :upcoming, -> { where("starts_at > ?", Time.current).order(:starts_at) }
   scope :past, -> { where("starts_at <= ?", Time.current).order(starts_at: :desc) }
@@ -53,6 +57,14 @@ class Booking < ApplicationRecord
     GoogleCalendarSyncJob.perform_later(id, "cancel")
   end
 
+  def mark_completed!
+    update!(status: :completed)
+  end
+
+  def mark_no_show!
+    update!(status: :no_show)
+  end
+
   def recurring?
     recurrence_rule_id.present?
   end
@@ -69,14 +81,19 @@ class Booking < ApplicationRecord
   end
 
   def schedule_reminder_jobs
+    now      = Time.current
+    fire_24h = starts_at - 24.hours
+    fire_2h  = starts_at - 2.hours
+
     ReminderSchedule.find_or_create_by!(account: account, booking: self, kind: "24h") do |r|
-      r.scheduled_for = starts_at - 24.hours
+      r.scheduled_for = fire_24h
     end
     ReminderSchedule.find_or_create_by!(account: account, booking: self, kind: "2h") do |r|
-      r.scheduled_for = starts_at - 2.hours
+      r.scheduled_for = fire_2h
     end
-    ReminderJob.set(wait_until: starts_at - 24.hours).perform_later(id, "24h")
-    ReminderJob.set(wait_until: starts_at - 2.hours).perform_later(id, "2h")
+
+    ReminderJob.set(wait_until: fire_24h).perform_later(id, "24h") if fire_24h > now
+    ReminderJob.set(wait_until: fire_2h).perform_later(id, "2h")   if fire_2h  > now
   end
 
   def enqueue_google_calendar_create
@@ -98,5 +115,24 @@ class Booking < ApplicationRecord
   def address_required_for_service
     return unless service&.requires_address?
     errors.add(:address, "es requerida para este servicio") if address.blank?
+  end
+
+  def starts_at_in_future
+    return unless starts_at
+    errors.add(:starts_at, "debe ser en el futuro") if starts_at <= Time.current
+  end
+
+  def associations_share_account
+    return unless account_id
+
+    {
+      customer:        customer,
+      service:         service,
+      user:            user,
+      recurrence_rule: recurrence_rule
+    }.each do |name, record|
+      next unless record && record.respond_to?(:account_id)
+      errors.add(name, "no pertenece a este negocio") if record.account_id != account_id
+    end
   end
 end

@@ -3,6 +3,10 @@
 require "rails_helper"
 
 RSpec.describe Bookings::CalendarPlacementWarnings do
+  # Hardcoded fixture dates land on Monday 2026-04-20; freeze "now" before
+  # that so the booking model's starts_at_in_future validation accepts them.
+  around { |ex| travel_to(Time.zone.local(2026, 4, 13, 9, 0)) { ex.run } }
+
   before do
     allow(GoogleCalendarSyncJob).to receive(:perform_later)
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))

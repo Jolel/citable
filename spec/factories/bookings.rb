@@ -1,9 +1,10 @@
 FactoryBot.define do
   factory :booking do
     association :account
-    association :customer
-    association :service
-    association :user
+    customer { association :customer, account: account }
+    service  { association :service,  account: account }
+    user     { association :user,     account: account }
+
     starts_at { 1.day.from_now.change(hour: 10, min: 0) }
     ends_at { nil } # set_ends_at callback will populate this
     status { "pending" }
@@ -27,6 +28,9 @@ FactoryBot.define do
     trait :past do
       starts_at { 2.days.ago.change(hour: 10, min: 0) }
       ends_at { 2.days.ago.change(hour: 11, min: 0) }
+      # The starts_at_in_future validation runs only on :create, so persist
+      # past-dated fixtures by skipping validation rather than disabling the model rule.
+      to_create { |instance| instance.save(validate: false) }
     end
 
     trait :with_deposit do

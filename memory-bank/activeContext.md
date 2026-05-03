@@ -2,7 +2,21 @@
 
 ## Current Focus
 
+Security audit fixes (2026-05-02): 15 findings (5 HIGH, 7 MEDIUM, 3 LOW) addressed in a single bundled change. See `progress.md` for the per-finding map.
+
 WhatsApp guided booking flow implemented (staged, not yet merged). Each business now has its own `whatsapp_number` on `Account`; inbound messages map the `To` field to an account and walk the customer through service → datetime → address (if needed) → confirmation. The booking calendar (`Day` + `Week` views, drag-and-drop) was completed in the previous phase.
+
+## Public booking flow — post-audit shape
+
+- Public URL is `/r/:account_whatsapp/...` (digit-constrained route). Account resolved from `whatsapp_number`. The pre-fix `Account.order(:id).first` is gone.
+- Confirmation route is `/r/:account_whatsapp/confirmada/:token` — `token` is `bookings.confirmation_token` (`has_secure_token`, 32-char). Confirmation page lookup goes through `@account.bookings.find_by!(confirmation_token: ...)`. Bigint IDs no longer leak via the URL.
+- Public `booking_params` permits only `:starts_at` and `:address`. `:service_id` is re-resolved through `@account.services.active`. `:user_id` is dropped entirely; staff is auto-picked via `PublicBookings::StaffPicker` (the same auto-assignment rule the WhatsApp guided flow uses, extracted from `AdvanceConversation#staff_member`).
+- Rails 8 `rate_limit` (Solid Cache backend, no new gem) gates POST `/r/:account_whatsapp/`: 5/min by (IP, account) and 3/hour by (phone, account).
+- `Booking` model: `validate :starts_at_in_future, on: :create` and `validate :associations_share_account` (rejects when customer/service/user/recurrence_rule belong to a different account_id). `schedule_reminder_jobs` no longer enqueues `ReminderJob`s with past `wait_until`; `ReminderJob#perform` no-ops when `booking.starts_at` is past.
+
+## Reply-binding (TwilioWebhook::HandleReply)
+
+`customer.bookings.active.upcoming.first` is gone. `1`/`2` replies bind to the booking referenced by the most recent outbound `MessageLog` with `kind` in `%w[reminder_24h reminder_2h confirmation]` (36-hour window). When ambiguous (zero or multiple actives, no recent prompt), falls through to `StartConversation` rather than guessing. `MessageLog#kind` is the new column populated by `Whatsapp::MessageSender` (via `WhatsappSendJob`), `ReminderJob`, and email fallback.
 
 ## What Was Just Built
 
