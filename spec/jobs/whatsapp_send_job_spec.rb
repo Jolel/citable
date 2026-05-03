@@ -3,6 +3,10 @@
 require "rails_helper"
 
 RSpec.describe WhatsappSendJob, type: :job do
+  # Freeze before the hard-coded 2026 booking date so starts_at_in_future
+  # accepts the fixture and the per-job behavior under test is reproducible.
+  around { |ex| travel_to(Time.zone.local(2026, 4, 13, 9, 0)) { ex.run } }
+
   before do
     allow(GoogleCalendarSyncJob).to receive(:perform_later)
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))
@@ -18,7 +22,7 @@ RSpec.describe WhatsappSendJob, type: :job do
       customer: customer,
       user: user,
       service: service,
-      starts_at: Time.zone.parse("2024-08-15 10:00:00")
+      starts_at: Time.zone.parse("2026-04-20 10:00:00")
     )
   end
 

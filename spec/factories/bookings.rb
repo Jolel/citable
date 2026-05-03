@@ -1,9 +1,10 @@
 FactoryBot.define do
   factory :booking do
     association :account
-    association :customer
-    association :service
-    association :user
+    customer { association :customer, account: account }
+    service  { association :service,  account: account }
+    user     { association :user,     account: account }
+
     starts_at { 1.day.from_now.change(hour: 10, min: 0) }
     ends_at { nil } # set_ends_at callback will populate this
     status { "pending" }
