@@ -179,7 +179,7 @@ RSpec.describe TwilioWebhook::HandleReply do
          .and change(Booking, :count).by(1)
 
         customer = account.customers.find_by!(phone: "5215599999999")
-        booking = account.bookings.order(:created_at).last
+        booking = account.bookings.order(:id).last
 
         expect(customer.name).to eq("Rosa Martinez")
         expect(booking.customer).to eq(customer)

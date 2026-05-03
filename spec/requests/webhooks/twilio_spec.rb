@@ -138,7 +138,7 @@ RSpec.describe "Webhooks::Twilio", type: :request do
         }.to change(Customer, :count).by(1)
          .and change(Booking, :count).by(1)
 
-        expect(account.bookings.order(:created_at).last.user).to eq(owner)
+        expect(account.bookings.order(:id).last.user).to eq(owner)
         expect(response).to have_http_status(:ok)
       end
 
