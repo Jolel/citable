@@ -160,12 +160,11 @@ RSpec.describe "Public::Bookings", type: :request do
     end
 
     it "returns 404 for a numeric primary key (IDOR closed)" do
-      expect {
-        get public_booking_confirmation_path(
-          account_whatsapp: account.whatsapp_number,
-          token: booking.id.to_s
-        )
-      }.to raise_error(ActiveRecord::RecordNotFound)
+      get public_booking_confirmation_path(
+        account_whatsapp: account.whatsapp_number,
+        token: booking.id.to_s
+      )
+      expect(response).to have_http_status(:not_found)
     end
 
     it "returns 404 for a token from another account's booking" do
@@ -178,12 +177,11 @@ RSpec.describe "Public::Bookings", type: :request do
                              service: other_service,
                              customer: create(:customer, account: other_account))
 
-      expect {
-        get public_booking_confirmation_path(
-          account_whatsapp: account.whatsapp_number,
-          token: other_booking.confirmation_token
-        )
-      }.to raise_error(ActiveRecord::RecordNotFound)
+      get public_booking_confirmation_path(
+        account_whatsapp: account.whatsapp_number,
+        token: other_booking.confirmation_token
+      )
+      expect(response).to have_http_status(:not_found)
     end
   end
 end

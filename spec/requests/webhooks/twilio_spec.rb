@@ -3,6 +3,10 @@
 require "rails_helper"
 
 RSpec.describe "Webhooks::Twilio", type: :request do
+  # The guided-flow examples send "2026-04-26 15:00" / "2026-04-27 15:00";
+  # freeze "now" before those dates so starts_at_in_future accepts them.
+  around { |ex| travel_to(Time.zone.local(2026, 4, 13, 9, 0)) { ex.run } }
+
   before do
     allow(GoogleCalendarSyncJob).to receive(:perform_later)
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))
