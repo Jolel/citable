@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_25_001000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_02_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -29,6 +29,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_001000) do
   create_table "bookings", force: :cascade do |t|
     t.bigint "account_id", null: false
     t.string "address"
+    t.string "confirmation_token"
     t.datetime "confirmed_at"
     t.datetime "created_at", null: false
     t.bigint "customer_id", null: false
@@ -41,8 +42,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_001000) do
     t.string "status", default: "pending", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false, comment: "staff member assigned"
+    t.index ["account_id", "google_event_id"], name: "idx_bookings_account_google_event", unique: true, where: "(google_event_id IS NOT NULL)"
     t.index ["account_id", "starts_at"], name: "index_bookings_on_account_id_and_starts_at"
     t.index ["account_id"], name: "index_bookings_on_account_id"
+    t.index ["confirmation_token"], name: "index_bookings_on_confirmation_token", unique: true
     t.index ["customer_id"], name: "index_bookings_on_customer_id"
     t.index ["recurrence_rule_id"], name: "index_bookings_on_recurrence_rule_id"
     t.index ["service_id"], name: "index_bookings_on_service_id"
@@ -75,11 +78,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_001000) do
     t.bigint "customer_id"
     t.string "direction", null: false
     t.string "external_id"
+    t.string "kind"
     t.string "status", default: "pending", null: false
     t.datetime "updated_at", null: false
     t.index ["account_id", "created_at"], name: "index_message_logs_on_account_id_and_created_at"
     t.index ["account_id"], name: "index_message_logs_on_account_id"
     t.index ["booking_id"], name: "index_message_logs_on_booking_id"
+    t.index ["customer_id", "kind", "created_at"], name: "index_message_logs_on_customer_id_and_kind_and_created_at"
     t.index ["customer_id"], name: "index_message_logs_on_customer_id"
     t.index ["external_id"], name: "index_message_logs_on_external_id"
   end
@@ -138,6 +143,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_001000) do
 
   create_table "users", force: :cascade do |t|
     t.bigint "account_id", null: false
+    t.datetime "confirmation_sent_at"
+    t.string "confirmation_token"
+    t.datetime "confirmed_at"
     t.datetime "created_at", null: false
     t.datetime "current_sign_in_at"
     t.string "current_sign_in_ip"
@@ -159,8 +167,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_001000) do
     t.string "reset_password_token"
     t.string "role", default: "staff", null: false
     t.integer "sign_in_count", default: 0, null: false
+    t.string "unconfirmed_email"
     t.datetime "updated_at", null: false
     t.index ["account_id"], name: "index_users_on_account_id"
+    t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
