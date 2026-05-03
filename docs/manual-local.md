@@ -19,8 +19,11 @@ By the end, you should be able to:
 5. Confirm that the booking appears in Google Calendar.
 6. Send a WhatsApp confirmation through Twilio.
 7. Receive a WhatsApp reply through the Twilio webhook.
+8. Send a free-text date such as "el viernes a las 3" and have the AI NLU parser resolve it to a real datetime.
+9. Receive a personalized AI-generated greeting when a conversation starts, and confirm "dale" or "sí" are accepted at the confirmation step.
+10. Ask a free-text question over WhatsApp (e.g. *"¿qué servicios tienen?"*, *"¿cuánto cuesta el corte?"*, *"¿a qué hora abren?"*) and receive a deterministic Spanish answer drawn from business data — without starting a booking conversation.
 
-Twilio is required only for WhatsApp testing. You can run the app and test Google Calendar without it.
+Twilio is required only for WhatsApp testing. A Gemini API key is required only for AI NLU testing. You can run the app and test Google Calendar without either.
 
 ---
 
@@ -36,6 +39,7 @@ Twilio is required only for WhatsApp testing. You can run the app and test Googl
 | A Twilio account | WhatsApp send/reply testing | n/a |
 | A WhatsApp-capable phone | Joining the Twilio WhatsApp Sandbox | n/a |
 | ngrok or another HTTPS tunnel | Receiving Twilio webhooks locally | `ngrok version` |
+| A Google AI Studio / Gemini API key | AI NLU free-text parsing | n/a |
 
 The app stores Google and Twilio secrets in Rails encrypted credentials. You need `config/master.key` from the project owner before you can edit or read those credentials.
 
@@ -113,7 +117,7 @@ Open credentials:
 EDITOR=nano bin/rails credentials:edit
 ```
 
-Add the Google and Twilio sections shown below. Replace every placeholder with the real value.
+Add the Google, Twilio, and Gemini sections shown below. Replace every placeholder with the real value.
 
 ```yaml
 google:
@@ -124,6 +128,9 @@ twilio:
   account_sid: "PASTE_TWILIO_ACCOUNT_SID_HERE"
   auth_token: "PASTE_TWILIO_AUTH_TOKEN_HERE"
   whatsapp_number: "+14155238886"
+
+gemini:
+  api_key: "PASTE_GEMINI_API_KEY_HERE"
 ```
 
 For nano, save and exit with **Ctrl + X**, then **Y**, then **Enter**.
@@ -134,6 +141,20 @@ Credential notes:
 - `twilio.account_sid` and `twilio.auth_token` come from the Twilio Console.
 - `twilio.whatsapp_number` must be the WhatsApp sender number without the `whatsapp:` prefix.
 - For the Twilio WhatsApp Sandbox, the sender is usually `+14155238886`.
+- `gemini.api_key` is used only when `Account#ai_nlu_enabled` is true. Without it the app falls back to the strict date/service parser. Get a key at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
+- `gemini.model` is optional. When omitted, the app uses `gemini-2.0-flash`. Override to switch to a newer model (e.g. `gemini-3.1-flash`) without a code deploy. Verify current model IDs at [ai.google.dev/gemini-api/docs/models](https://ai.google.dev/gemini-api/docs/models).
+
+**Gemini free-tier limits (as of April 2026):**
+
+| Model | Requests / min | Requests / day | Shared token limit |
+|---|---|---|---|
+| Flash-Lite | 15 | 1,000 | 250,000 / min |
+| Flash | 10 | 250 | 250,000 / min |
+| Pro | 5 | 100 | 250,000 / min |
+
+For local development the free tier is sufficient. The seeded "Estudio de Ana" account averages one NLU call per booking step, well within the 250 requests/day Flash limit for testing.
+
+> ⚠️ **LFPDPPP / data-privacy notice — read before using in production:** On the Gemini free tier, Google may use inputs and outputs to improve its models. Customer names, phone fragments, and appointment details sent to the NLU parser could be included. **For production, switch to a paid Gemini plan** (billing enabled in Google Cloud) which opts you out of data training, and update the business's *aviso de privacidad* to disclose the AI processor. See `docs/ai-integration-plan.md §2` for the full compliance checklist.
 
 ---
 
@@ -285,11 +306,11 @@ To test outbound WhatsApp:
 
 ### Inbound guided booking flow
 
-The app now supports a full guided booking flow over WhatsApp. When a customer messages the business WhatsApp number, the app walks them through:
+The app supports a full guided booking flow over WhatsApp. When a customer messages the business WhatsApp number, the app walks them through:
 
 1. **Name** — collected once for new customers.
 2. **Service selection** — numbered list of active services.
-3. **Date and time** — customer enters free text in formats like `2026-04-26 15:00`, `26/04/2026 15:00`, or `mañana 15:00`.
+3. **Date and time** — customer enters a date and time.
 4. **Address** — only asked if the selected service requires it.
 5. **Confirmation** — customer replies `1` to confirm or `2` to cancel.
 
@@ -310,6 +331,92 @@ Expected result:
 - After confirmation (`1`), a booking is created with status `pending` and assigned to the first available staff member.
 - At each step, the app replies with the next prompt via `Whatsapp::MessageSender`.
 
+### AI — greeting generation, NLU parsing, and confirmation
+
+The seeded "Estudio de Ana" account has `ai_nlu_enabled: true`, which activates all Gemini 2.0 Flash AI features. When enabled, three stages of the conversation are enhanced:
+
+**1. Conversation start — personalised greeting (`Llm::GreetingGenerator`)**
+
+When a customer messages the business number for the first time, instead of the hardcoded "¡Hola! Para reservar tu cita…" prompt, the app calls `Llm::GreetingGenerator`. It generates a short, warm message in Mexican Spanish tailored to the business name and, for returning customers, to their name and the available services. New customers get a friendly name request; known customers get a greeting plus the numbered service list so they can still reply "1" or type the service name freely.
+
+Fallback: if the Gemini key is missing, the LLM call raises `Llm::Client::Error` (rescued silently) and the hardcoded prompts are used exactly as before.
+
+**2. Service and date/time steps — NLU parsing (`Llm::NluParser`)**
+
+- **Service step:** if the customer types a service name instead of a number (e.g. `quiero un corte`), the LLM matches it to the closest active service with ≥ 0.8 confidence. Below that threshold, or if the Gemini key is missing, the app re-prompts with the numbered list as before.
+- **Date/time step:** if the customer sends a natural-language date (e.g. `el viernes a las 3`, `mañana por la tarde a las 5`, `el próximo lunes a las 10am`), the LLM parses it to an ISO 8601 datetime. The same 0.8 confidence threshold and silent fallback apply.
+
+**3. Confirmation step — natural-language acceptance (`Llm::NluParser.parse_confirmation`)**
+
+At the final confirmation prompt the bot previously only accepted `1` (confirm) or `2` (cancel). With `ai_nlu_enabled`, it also accepts conversational replies:
+
+| Customer says | Interpreted as |
+|---|---|
+| `dale`, `sí`, `claro`, `va`, `ok`, `perfecto`, `confirmo` | Confirmed |
+| `no`, `mejor no`, `cancela`, `no puedo`, `no gracias` | Cancelled |
+
+Rigid `1` / `2` are tried first; the LLM only fires for anything else. Below 0.8 confidence the bot re-prompts with "Responde 1 para confirmar o 2 para cancelar."
+
+All three LLM calls share the same 4-second timeout and silent fallback — the conversation never breaks if the Gemini API is slow or unavailable.
+
+**4. Question answering before booking (`Llm::QuestionClassifier` + `TwilioWebhook::AnswerQuestion`)**
+
+When the customer's first message is a question instead of a booking attempt, the app answers it from business data and offers to book — **without** creating a `WhatsappConversation` row, so the next message can either ask another question or start the normal booking flow.
+
+The classifier returns one of these intents (≥ 0.8 confidence required, otherwise falls through to the booking greeting):
+
+| Intent | Example messages | Answer source |
+|---|---|---|
+| `services_list` | *"¿qué servicios tienen?"*, *"qué hacen"*, *"menú"* | Active services with name, price, duration, and `Service#description` if set |
+| `price` | *"¿cuánto cuesta el corte?"*, *"precio del tinte"* | Named service's `price` and `duration_label` (or the full list if no service mentioned) |
+| `duration` | *"¿cuánto tarda el corte?"* | Named service's `duration_label` |
+| `hours` | *"¿a qué hora abren?"*, *"horarios"* | `Account#business_hours` rendered as a weekly summary in Spanish |
+
+Every answer ends with *"¿Quieres reservar una cita?"* so the customer knows how to proceed. Intents `booking` and `other` (or anything below 0.8 confidence) fall through to the existing greeting + service list.
+
+The LLM only **classifies** the question — Ruby renders the answer deterministically from the database, so there are no hallucinations.
+
+**Configure the data the answers depend on:**
+
+- *Service descriptions:* Dashboard → **Servicios** → edit a service → fill **Descripción**.
+- *Business hours:* Dashboard → **Configuración** → **Horarios de atención** → set open/close times per weekday or check **Cerrado**.
+
+To test from WhatsApp:
+
+1. Make sure `ai_nlu_enabled` is true for the account, the Gemini key is set, and `bin/dev` + `ngrok` are running.
+2. From a phone with **no active WhatsApp conversation and no upcoming booking**, send *"¿qué servicios tienen?"*. Expect the services list with descriptions/prices and the booking CTA.
+3. Send *"¿cuánto cuesta el corte?"* — expect a price + duration sentence.
+4. Send *"¿a qué hora abren?"* — expect the weekly hours summary (if not configured, the bot says it hasn't published hours yet).
+5. Confirm in the Rails console that **no** `WhatsappConversation` was created for those turns:
+   ```ruby
+   Account.find_by(name: "Estudio de Ana").whatsapp_conversations.where(from_phone: "<your-phone>").count
+   ```
+6. Then send *"hola, quiero un corte mañana a las 3"* — the classifier returns `booking`, the bot falls through and starts the normal booking flow.
+
+Token usage is logged on the inbound `MessageLog` for each Q&A turn (`ai_input_tokens`, `ai_output_tokens`, `ai_model`), the same way as the other AI features.
+
+**Enabling or disabling AI for an account:**
+
+```ruby
+# Rails console
+account = Account.find_by(name: "Estudio de Ana")
+account.update!(ai_nlu_enabled: true)   # enable all AI features
+account.update!(ai_nlu_enabled: false)  # disable — strict FSM only
+```
+
+**Inspecting token usage:**
+
+After any AI-assisted turn, the most recent inbound `MessageLog` for that account stores the token counts:
+
+```ruby
+account = Account.find_by(name: "Estudio de Ana")
+account.message_logs.inbound.where.not(ai_model: nil).last
+# => #<MessageLog ai_model: "gemini-2.0-flash", ai_input_tokens: 130, ai_output_tokens: 22>
+# (ai_model reflects whichever model is set in credentials.gemini.model)
+```
+
+**Skipping AI locally:** if you do not add a `gemini.api_key` credential, all three AI features raise `Llm::Client::Error` internally and fall back silently. You do not need a Gemini key to run the app or test any other part of the booking flow.
+
 ### Existing confirm/cancel flow
 
 Customers with an active upcoming booking who message the Sandbox number still get the legacy confirm/cancel flow — the guided booking flow only starts if there is no active upcoming booking for that customer.
@@ -329,8 +436,12 @@ Customers with an active upcoming booking who message the Sandbox number still g
 | Reset database and seed data | `bin/setup --reset --skip-server` |
 | Open Rails console | `bin/rails console` |
 | List routes | `bin/rails routes` |
-| Run test suite | `bundle exec rspec` |
+| Run test suite | `bin/rspec` |
+| Run full CI locally | `bin/ci` |
 | Tail development log | `tail -f log/development.log` |
+| Check AI token usage | `MessageLog.where.not(ai_model: nil).sum(:ai_input_tokens)` (in Rails console) |
+| Inspect last AI-assisted log | `Account.find_by(name: "Estudio de Ana").message_logs.inbound.where.not(ai_model: nil).last` (in Rails console) |
+| Toggle all AI features for Ana's account | `Account.find_by(name: "Estudio de Ana").update!(ai_nlu_enabled: true\|false)` (in Rails console) |
 
 ---
 
@@ -409,6 +520,43 @@ The app rejected the Twilio signature. Confirm:
 - The Twilio Sandbox webhook URL exactly matches the ngrok HTTPS URL plus `/webhooks/twilio`.
 - The webhook method is `POST`.
 - You did not restart ngrok without updating the Twilio webhook URL.
+
+### AI features do not activate (no greeting, no free-text parsing)
+
+Check in order:
+
+1. Confirm `ai_nlu_enabled` is true for the account:
+   ```ruby
+   Account.find_by(name: "Estudio de Ana").ai_nlu_enabled? # => true
+   ```
+2. Confirm the `gemini.api_key` credential is set and `bin/dev` was restarted after editing credentials.
+3. Check `log/development.log` for lines starting with `[Llm::GreetingGenerator]` or `[Llm::NluParser]`. A `WARN` line means the LLM call failed or returned low confidence and the fallback took over.
+4. If the key is missing entirely, the log shows `Gemini API key not configured` and every AI step falls back silently. No action is needed unless you want the AI features active.
+
+**AI greeting is not personalised / falls back to hardcoded prompt:**
+
+- Check that `ai_nlu_enabled` is true *and* a valid `gemini.api_key` is set.
+- Check `log/development.log` for `[Llm::GreetingGenerator] …` warn lines.
+- A blank response from Gemini also triggers the fallback. This can happen on the free tier under load.
+
+**"dale" / "sí" not accepted at the confirmation step:**
+
+- Confirm `ai_nlu_enabled` is true.
+- Check `log/development.log` for `[Llm::NluParser] parse_confirmation failed` lines.
+- If Gemini returns low confidence (< 0.8), the bot re-prompts with "Responde 1 para confirmar o 2 para cancelar." — `1` and `2` always work regardless of AI status.
+
+**Question (e.g. *"¿qué servicios tienen?"*) starts the booking flow instead of being answered:**
+
+- The Q&A branch only runs when there is **no active `WhatsappConversation` and no active upcoming booking** for the customer. If you already have an in-progress conversation, send any "out" message to let it expire (30 min) or clear it manually:
+  ```ruby
+  Account.find_by(name: "Estudio de Ana").whatsapp_conversations.where(from_phone: "<your-phone>").destroy_all
+  ```
+- Confirm `ai_nlu_enabled` is true and the Gemini key is set — without them, every message falls straight into the booking greeting.
+- Check `log/development.log` for `[Llm::QuestionClassifier] failed` warnings. Below 0.8 confidence, intents `booking`/`other`, or LLM errors all fall through to the booking flow by design.
+
+**Hours answer says "Aún no hemos publicado nuestros horarios":**
+
+- `Account#business_hours` is empty. Set it in **Configuración → Horarios de atención**.
 
 ---
 

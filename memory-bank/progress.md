@@ -5,11 +5,10 @@
 ## What Works (Code Written, Needs `db:migrate` to Run)
 
 - [x] Rails 8.1.3 app created with PostgreSQL + TailwindCSS + Solid Queue
-- [x] All gems installed: devise, acts_as_tenant, twilio-ruby, resend, money-rails
+- [x] All gems installed: devise, twilio-ruby, resend, money-rails
 - [x] Database migrations written
 - [x] All 9 models with associations, enums, validations, scopes
 - [x] Devise configuration (initializer)
-- [x] acts_as_tenant configured (require_tenant = true)
 - [x] money-rails configured (MXN default)
 - [x] Dashboard account access through the signed-in user
 - [x] Dashboard controllers (bookings, customers, services, staff, settings)
@@ -25,6 +24,8 @@
 - [x] Seeds with "Ana" persona data
 - [x] Google OAuth2 + Calendar sync (11 migrations total; `Dashboard::GoogleOauthController` — manual Signet flow, no OmniAuth)
 - [x] `RenewGoogleWatchJob` — daily job renewing push channels before Google's 7-day expiry
+- [x] **AI NLU Phase 1** — `Llm::Client` (Gemini 2.0 Flash REST wrapper), `Llm::NluParser` (parse_datetime + parse_service), LLM fallback wired into `TwilioWebhook::AdvanceConversation`. Feature-flagged via `Account#ai_nlu_enabled`. Token usage tracked in `message_logs` (ai_input_tokens, ai_output_tokens, ai_model). WebMock added to test suite; 26 new specs.
+- [x] **AI NLU Phase 2 — Question Answering** — `Llm::QuestionClassifier` (Gemini intent classifier for `services_list`/`price`/`duration`/`hours`), `TwilioWebhook::AnswerQuestion` (deterministic Spanish renderer reading `Service#description` and `Account#business_hours`). Wired into `TwilioWebhook::StartConversation` so questions are answered before any `WhatsappConversation` row is created; booking intent falls through to the guided flow unchanged. Adds `services.description` (text) and `accounts.business_hours` (jsonb), surfaced in the dashboard service form and settings page. 374 examples green.
 
 ## What Needs to Be Done
 
@@ -87,6 +88,15 @@
   - `TwilioWebhook::HandleReply` — rewritten to resolve account from `To`, route to conversation or legacy confirm/cancel
   - `Whatsapp::MessageSender` — centralized outbound sender (quota check, Twilio API, MessageLog)
   - `WhatsappSendJob` — now uses `MessageSender` internally
+
+- AI NLU Phase 2 — Question Answering (feat/ai-nlu-phase1, 2026-04-30):
+  - Migration adds `services.description` (text) and `accounts.business_hours` (jsonb)
+  - `Llm::QuestionClassifier` — single-call intent classifier; intents `services_list`/`price`/`duration`/`hours` are answered, `booking`/`other`/low-confidence fall through
+  - `TwilioWebhook::AnswerQuestion` — pure-Ruby Spanish renderer; always ends with "¿Quieres reservar una cita?"
+  - `TwilioWebhook::StartConversation` accepts `body:`, branches to Q&A before creating a `WhatsappConversation`, logs token usage on the inbound `MessageLog`
+  - Dashboard: `Service#description` textarea on the service form; weekly hours editor (open/close per weekday + Cerrado checkbox) on the settings page
+  - 3 new/updated spec files; full suite at 374 examples
+  - `docs/manual-local.md` updated with verification item, full subsection under §8, and troubleshooting
 
 - Dashboard booking calendar first pass:
   - `GET /dashboard/calendar` renders `Día` and `Semana`

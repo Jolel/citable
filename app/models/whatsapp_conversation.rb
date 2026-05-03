@@ -8,6 +8,7 @@ class WhatsappConversation < ApplicationRecord
     awaiting_datetime
     awaiting_address
     confirming_booking
+    confirming_cancellation
     completed
     cancelled
   ].freeze

@@ -7,7 +7,9 @@ account = Account.find_or_create_by!(name: "Estudio de Ana") do |a|
   a.locale           = "es-MX"
   a.plan             = "free"
   a.whatsapp_number  = "14155238886"  # Twilio WhatsApp Sandbox sender number (without whatsapp: prefix)
+  a.ai_nlu_enabled   = true           # Pilot NLU parsing for Ana's account
 end
+account.update!(ai_nlu_enabled: true) unless account.ai_nlu_enabled?
 puts "Account: #{account.name}"
 
 # Owner user

@@ -27,6 +27,40 @@
       </div>
 
       <div>
+        <%= f.label :address, "Dirección", class: "block text-sm font-semibold text-forest mb-1" %>
+        <p class="text-xs text-forest/50 mb-1.5">Se comparte cuando un cliente pregunta por WhatsApp dónde estás. Déjala en blanco si no quieres compartirla aún.</p>
+        <%= f.text_field :address, placeholder: "Av. Ejemplo 123, Col. Centro, Ciudad de México", class: "w-full rounded-xl border border-cream-dark bg-white px-4 py-2.5 text-sm text-forest placeholder-forest/40 focus:outline-none focus:ring-2 focus:ring-brand" %>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-forest mb-2">Horarios de atención</label>
+        <p class="text-xs text-forest/50 mb-3">Se muestran cuando un cliente pregunta por WhatsApp a qué hora abren.</p>
+        <div class="space-y-2 rounded-xl border border-cream-dark bg-white p-4">
+          <% day_labels = { "mon" => "Lunes", "tue" => "Martes", "wed" => "Miércoles", "thu" => "Jueves", "fri" => "Viernes", "sat" => "Sábado", "sun" => "Domingo" } %>
+          <% %w[mon tue wed thu fri sat sun].each do |day| %>
+            <% range = (@account.business_hours || {})[day] %>
+            <% open_t  = range.is_a?(Array) ? range[0] : nil %>
+            <% close_t = range.is_a?(Array) ? range[1] : nil %>
+            <% closed  = range.nil? && @account.business_hours.key?(day) %>
+            <div class="grid grid-cols-12 items-center gap-2">
+              <div class="col-span-3 text-sm text-forest"><%= day_labels[day] %></div>
+              <input type="time" name="account[business_hours][<%= day %>][open]" value="<%= open_t %>"
+                     class="col-span-3 rounded-lg border border-cream-dark bg-white px-2 py-1.5 text-sm text-forest focus:outline-none focus:ring-2 focus:ring-brand">
+              <span class="col-span-1 text-center text-xs text-forest/40">a</span>
+              <input type="time" name="account[business_hours][<%= day %>][close]" value="<%= close_t %>"
+                     class="col-span-3 rounded-lg border border-cream-dark bg-white px-2 py-1.5 text-sm text-forest focus:outline-none focus:ring-2 focus:ring-brand">
+              <label class="col-span-2 inline-flex items-center gap-1.5 text-xs text-forest/60">
+                <input type="hidden" name="account[business_hours][<%= day %>][closed]" value="0">
+                <input type="checkbox" name="account[business_hours][<%= day %>][closed]" value="1" <%= "checked" if closed %>
+                       class="rounded border-cream-dark text-brand focus:ring-brand">
+                Cerrado
+              </label>
+            </div>
+          <% end %>
+        </div>
+      </div>
+
+      <div>
         <%= f.submit "Guardar cambios", class: "rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 cursor-pointer" %>
       </div>
     <% end %>
