@@ -40,7 +40,7 @@ RSpec.describe TwilioWebhook::HandleReply do
     context "when the customer phone number is not recognized" do
       it "starts a booking conversation asking for their name" do
         result = call(from: "whatsapp:+19990000000")
-        expect(result).to be_success.and(have_attributes(value!: :awaiting_name))
+        expect(result).to be_success.and(have_attributes(value!: "awaiting_name"))
       end
 
       it "creates an inbound and outbound MessageLog" do
@@ -51,7 +51,7 @@ RSpec.describe TwilioWebhook::HandleReply do
     context "when the customer phone is not recognized but profile_name is present" do
       it "creates a customer and skips to service selection" do
         result = call(from: "whatsapp:+19990000000", profile_name: "Ana López")
-        expect(result).to be_success.and(have_attributes(value!: :awaiting_service))
+        expect(result).to be_success.and(have_attributes(value!: "awaiting_service"))
       end
 
       it "creates the customer with the profile name" do
@@ -68,7 +68,7 @@ RSpec.describe TwilioWebhook::HandleReply do
 
       it "returns the service selection step" do
         result = call
-        expect(result).to be_success.and(have_attributes(value!: :awaiting_service))
+        expect(result).to be_success.and(have_attributes(value!: "awaiting_service"))
       end
 
       it "creates a booking conversation" do
@@ -87,17 +87,17 @@ RSpec.describe TwilioWebhook::HandleReply do
         expect(booking.reload).to be_confirmed
       end
 
-      it "creates an inbound whatsapp MessageLog" do
-        expect { call(body: "1") }.to change(MessageLog, :count).by(1)
+      it "creates an inbound whatsapp MessageLog and an outbound confirmation ack" do
+        expect { call(body: "1") }.to change(MessageLog, :count).by(2)
 
-        log = MessageLog.last
-        expect(log.channel).to eq("whatsapp")
-        expect(log.direction).to eq("inbound")
-        expect(log.status).to eq("delivered")
-        expect(log.body).to eq("1")
-        expect(log.customer).to eq(customer)
-        expect(log.booking).to eq(booking)
-        expect(log.account).to eq(account)
+        inbound = MessageLog.inbound.last
+        expect(inbound.body).to eq("1")
+        expect(inbound.customer).to eq(customer)
+        expect(inbound.booking).to eq(booking)
+        expect(inbound.account).to eq(account)
+
+        outbound = MessageLog.outbound.last
+        expect(outbound.body).to start_with("Listo, tu cita quedó confirmada")
       end
     end
 
@@ -112,23 +112,29 @@ RSpec.describe TwilioWebhook::HandleReply do
         expect(booking.reload).to be_cancelled
       end
 
-      it "creates an inbound whatsapp MessageLog" do
-        expect { call(body: "2") }.to change(MessageLog, :count).by(1)
+      it "creates an inbound whatsapp MessageLog and an outbound cancellation ack" do
+        expect { call(body: "2") }.to change(MessageLog, :count).by(2)
+
+        outbound = MessageLog.outbound.last
+        expect(outbound.body).to start_with("Listo, cancelé tu cita")
       end
     end
 
     context "when customer sends an unrecognized reply" do
-      it "returns Success with the booking" do
+      it "returns Success(:fallback_sent) so the bot is never silent" do
         result = call(body: "hola")
-        expect(result).to be_success.and(have_attributes(value!: booking))
+        expect(result).to be_success.and(have_attributes(value!: :fallback_sent))
       end
 
       it "does not change the booking status" do
         expect { call(body: "hola") }.not_to change { booking.reload.status }
       end
 
-      it "still creates an inbound MessageLog" do
-        expect { call(body: "hola") }.to change(MessageLog, :count).by(1)
+      it "creates both an inbound MessageLog and an outbound fallback" do
+        expect { call(body: "hola") }.to change(MessageLog, :count).by(2)
+
+        outbound = MessageLog.outbound.last
+        expect(outbound.body).to include("Tienes una cita el")
       end
     end
 

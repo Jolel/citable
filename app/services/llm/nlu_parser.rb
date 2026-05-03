@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 module Llm
-  # Extracts structured booking intent from free-text Spanish WhatsApp messages.
-  # Phase 1: parse_datetime and parse_service only (read-only NLU, no tool calls).
-  class NluParser
-    # Wraps the parsed value with token-usage metadata for logging.
-    Result = Data.define(:value, :input_tokens, :output_tokens, :model)
+  # Toolkit for extracting structured booking intent from free-text Spanish WhatsApp messages.
+  module NluParser
+    extend Dry::Monads[:result]
+
+    MIN_CONFIDENCE = 0.8
 
     DATETIME_SCHEMA = {
       type: "object",
@@ -40,60 +40,44 @@ module Llm
       required: %w[decision confidence]
     }.freeze
 
-    MIN_CONFIDENCE = 0.8
-
-    def self.parse_datetime(body, account:)
-      new(account: account).parse_datetime(body)
-    end
-
-    def self.parse_service(body, services, account:)
-      new(account: account).parse_service(body, services)
-    end
-
-    def self.parse_confirmation(body, account:)
-      new(account: account).parse_confirmation(body)
-    end
-
-    def initialize(account:)
-      @account = account
-    end
-
-    # Returns Result(value: Time) or nil.
-    def parse_datetime(body)
+    # Returns Success({ value: Time, input_tokens:, output_tokens:, model: })
+    # or Failure(:low_confidence | :llm_error).
+    def self.parse_datetime(body, llm: Citable::Container["infrastructure.llm"])
       today  = Time.zone.today.strftime("%Y-%m-%d")
       system = <<~PROMPT.strip
         Eres un asistente que extrae fechas y horas de mensajes en español mexicano.
-        Hoy es #{today}. La zona horaria es America/Mexico_City.
-        Devuelve starts_at como ISO 8601 (YYYY-MM-DDTHH:MM:SS), o null si no puedes determinarlo con certeza.
+        Hoy es #{today}. La zona horaria es America/Mexico_City (siempre UTC-6, sin horario de verano).
+        Devuelve starts_at como ISO 8601 sin zona horaria (YYYY-MM-DDTHH:MM:SS).
+        No incluyas "Z" ni offsets como "-05:00" o "-06:00"; el sistema lo interpretará en America/Mexico_City.
+        Devuelve null si no puedes determinarlo con certeza.
         Devuelve confidence entre 0 y 1.
       PROMPT
       user = "Extrae la fecha y hora de: \"#{body}\""
 
-      result  = Llm::Client.call(system: system, user: user, schema: DATETIME_SCHEMA)
-      parsed  = result[:content]
-      raw_time = parsed["starts_at"]
-      confidence = parsed["confidence"].to_f
+      response   = llm.call(system: system, user: user, schema: DATETIME_SCHEMA)
+      raw_time   = response.content["starts_at"]
+      confidence = response.content["confidence"].to_f
 
-      return nil if raw_time.blank? || confidence < MIN_CONFIDENCE
+      return Failure(:low_confidence) if raw_time.blank? || confidence < MIN_CONFIDENCE
 
-      time = Time.zone.parse(raw_time)
-      return nil unless time
+      naive = raw_time.to_s.sub(/(Z|[+-]\d{2}:?\d{2})\z/, "")
+      time  = Time.zone.parse(naive)
+      return Failure(:low_confidence) unless time
 
-      Result.new(value: time,
-                 input_tokens:  result[:input_tokens],
-                 output_tokens: result[:output_tokens],
-                 model:         result[:model])
-    rescue Llm::Client::Error => e
-      Rails.logger.warn "[Llm::NluParser] parse_datetime failed: #{e.message}"
-      nil
+      Success({ value: time, input_tokens: response.input_tokens,
+                output_tokens: response.output_tokens, model: response.model })
+    rescue Llm::Port::Error => e
+      Rails.logger.error "[Llm::NluParser] parse_datetime failed: #{e.message}"
+      Failure(:llm_error)
     rescue ArgumentError, TypeError => e
-      Rails.logger.warn "[Llm::NluParser] parse_datetime parse error: #{e.message}"
-      nil
+      Rails.logger.error "[Llm::NluParser] parse_datetime parse error: #{e.message}"
+      Failure(:llm_error)
     end
 
-    # Returns Result(value: Service) or nil.
-    def parse_service(body, services)
-      return nil if services.empty?
+    # Returns Success({ value: Service, input_tokens:, output_tokens:, model: })
+    # or Failure(:low_confidence | :llm_error).
+    def self.parse_service(body, services, llm: Citable::Container["infrastructure.llm"])
+      return Failure(:low_confidence) if services.empty?
 
       service_list = services.each_with_index.map { |svc, i| "#{i + 1}. #{svc.name}" }.join(", ")
       system = <<~PROMPT.strip
@@ -103,30 +87,28 @@ module Llm
       PROMPT
       user = "Servicios: #{service_list}. Mensaje: \"#{body}\". ¿Qué servicio quiere el cliente?"
 
-      result     = Llm::Client.call(system: system, user: user, schema: SERVICE_SCHEMA)
-      parsed     = result[:content]
-      idx        = parsed["service_index"]
-      confidence = parsed["confidence"].to_f
+      response   = llm.call(system: system, user: user, schema: SERVICE_SCHEMA)
+      idx        = response.content["service_index"]
+      confidence = response.content["confidence"].to_f
 
-      return nil if idx.nil? || confidence < MIN_CONFIDENCE
+      return Failure(:low_confidence) if idx.nil? || confidence < MIN_CONFIDENCE
 
       service = services[idx.to_i - 1]
-      return nil unless service
+      return Failure(:low_confidence) unless service
 
-      Result.new(value: service,
-                 input_tokens:  result[:input_tokens],
-                 output_tokens: result[:output_tokens],
-                 model:         result[:model])
-    rescue Llm::Client::Error => e
-      Rails.logger.warn "[Llm::NluParser] parse_service failed: #{e.message}"
-      nil
+      Success({ value: service, input_tokens: response.input_tokens,
+                output_tokens: response.output_tokens, model: response.model })
+    rescue Llm::Port::Error => e
+      Rails.logger.error "[Llm::NluParser] parse_service failed: #{e.message}"
+      Failure(:llm_error)
     rescue ArgumentError, TypeError => e
-      Rails.logger.warn "[Llm::NluParser] parse_service parse error: #{e.message}"
-      nil
+      Rails.logger.error "[Llm::NluParser] parse_service parse error: #{e.message}"
+      Failure(:llm_error)
     end
 
-    # Returns Result(value: :confirmed | :cancelled) or nil.
-    def parse_confirmation(body)
+    # Returns Success({ value: :confirmed | :cancelled, input_tokens:, output_tokens:, model: })
+    # or Failure(:low_confidence | :llm_error).
+    def self.parse_confirmation(body, llm: Citable::Container["infrastructure.llm"])
       system = <<~PROMPT.strip
         Eres un asistente que interpreta si un cliente acepta o rechaza una cita por WhatsApp, en español mexicano.
         Devuelve decision: "confirmed" si acepta (sí, si, dale, claro, va, ok, perfecto, confirmo, etc.),
@@ -135,25 +117,18 @@ module Llm
       PROMPT
       user = "Mensaje del cliente: \"#{body}\""
 
-      result     = Llm::Client.call(system: system, user: user, schema: CONFIRMATION_SCHEMA)
-      parsed     = result[:content]
-      decision   = parsed["decision"]
-      confidence = parsed["confidence"].to_f
+      response   = llm.call(system: system, user: user, schema: CONFIRMATION_SCHEMA)
+      decision   = response.content["decision"]
+      confidence = response.content["confidence"].to_f
 
-      return nil if decision.nil? || confidence < MIN_CONFIDENCE
+      return Failure(:low_confidence) if decision.nil? || confidence < MIN_CONFIDENCE
 
       decision_sym = decision == "confirmed" ? :confirmed : :cancelled
-      Result.new(value:         decision_sym,
-                 input_tokens:  result[:input_tokens],
-                 output_tokens: result[:output_tokens],
-                 model:         result[:model])
-    rescue Llm::Client::Error => e
-      Rails.logger.warn "[Llm::NluParser] parse_confirmation failed: #{e.message}"
-      nil
+      Success({ value: decision_sym, input_tokens: response.input_tokens,
+                output_tokens: response.output_tokens, model: response.model })
+    rescue Llm::Port::Error => e
+      Rails.logger.error "[Llm::NluParser] parse_confirmation failed: #{e.message}"
+      Failure(:llm_error)
     end
-
-    private
-
-    attr_reader :account
   end
 end

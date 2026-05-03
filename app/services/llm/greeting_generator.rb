@@ -11,11 +11,10 @@ module Llm
   # For a known customer: short personalised greeting (1–2 sentences).
   # For a new customer:   short welcome + ask for their full name.
   #
-  # Returns Result or nil (caller must supply a hardcoded fallback).
+  # Returns Success({ message:, input_tokens:, output_tokens:, model: })
+  # or Failure(:blank_message | :llm_error). Caller must supply a hardcoded fallback.
   class GreetingGenerator
     include Dry::Monads[:result]
-
-    Result = Data.define(:message, :input_tokens, :output_tokens, :model)
 
     SCHEMA = {
       type: "object",
@@ -26,27 +25,29 @@ module Llm
       required: %w[message]
     }.freeze
 
-    def self.call(...) = new.call(...)
+    def self.call(llm: Citable::Container["infrastructure.llm"], **kwargs)
+      new(llm: llm).call(**kwargs)
+    end
+
+    def initialize(llm: Citable::Container["infrastructure.llm"])
+      @llm = llm
+    end
 
     def call(account:, customer: nil)
-      llm_result = Llm::Client.call(
+      response = @llm.call(
         system: system_prompt(account),
         user:   user_prompt(customer: customer, account: account),
         schema: SCHEMA
       )
 
-      message = llm_result[:content]["message"]
-      return nil if message.blank?
+      message = response.content["message"]
+      return Failure(:blank_message) if message.blank?
 
-      Result.new(
-        message:       message,
-        input_tokens:  llm_result[:input_tokens],
-        output_tokens: llm_result[:output_tokens],
-        model:         llm_result[:model]
-      )
-    rescue Llm::Client::Error => e
+      Success({ message: message, input_tokens: response.input_tokens,
+                output_tokens: response.output_tokens, model: response.model })
+    rescue Llm::Port::Error => e
       Rails.logger.warn "[Llm::GreetingGenerator] #{e.message}"
-      nil
+      Failure(:llm_error)
     end
 
     private

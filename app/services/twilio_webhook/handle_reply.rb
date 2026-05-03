@@ -7,57 +7,68 @@ module TwilioWebhook
     def self.call(...) = new.call(...)
 
     def call(from:, to:, body:, profile_name: nil)
-      @body = body.to_s.strip
-      @from_phone = Account.normalize_whatsapp_number(from)
-      @account = Account.find_by(whatsapp_number: Account.normalize_whatsapp_number(to))
-      return Success(:account_not_found) unless account
+      body = body.to_s.strip
+      from_phone = Account.normalize_whatsapp_number(from)
+      to_phone = Account.normalize_whatsapp_number(to)
+      account = Account.find_by(whatsapp_number: to_phone)
 
-      @customer = find_customer
-      conversation = active_conversation
+      unless account
+        Rails.logger.warn "[TwilioWebhook::HandleReply] No account for WhatsApp number #{to_phone}"
+        return Success(:account_not_found)
+      end
+
+      customer = find_customer(account:, from_phone:)
+      conversation = active_conversation(account:, from_phone:)
 
       if conversation
-        log_inbound(customer: conversation.customer)
-        return AdvanceConversation.call(conversation: conversation, body: @body, account: account, from_phone: from_phone)
+        Rails.logger.info "[TwilioWebhook::HandleReply] account=#{account.id} phone=#{from_phone} branch=advance_conversation step=#{conversation.step}"
+        log_inbound(account:, customer: conversation.customer, body:)
+        return AdvanceConversation.call(conversation:, body:, account:, from_phone:)
       end
 
       if customer
         booking = customer.bookings.active.upcoming.first
         if booking
-          log_inbound(customer: customer, booking: booking)
-          return ProcessBookingReply.call(booking: booking, body: @body)
+          Rails.logger.info "[TwilioWebhook::HandleReply] account=#{account.id} phone=#{from_phone} branch=process_booking_reply booking_id=#{booking.id}"
+          log_inbound(account:, customer:, booking:, body:)
+          return ProcessBookingReply.call(
+            booking:    booking,
+            body:,
+            account:,
+            from_phone:,
+            customer:
+          )
         end
       end
 
-      log_inbound(customer: customer)
-      StartConversation.call(account: account, from_phone: from_phone, customer: customer, profile_name: profile_name.presence)
+      Rails.logger.info "[TwilioWebhook::HandleReply] account=#{account.id} phone=#{from_phone} branch=start_conversation customer=#{customer&.id || "new"}"
+      log_inbound(account:, customer:, body:)
+      StartConversation.call(account:, from_phone:, customer:, profile_name: profile_name.presence, body:)
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error "[TwilioWebhook::HandleReply] #{e.message}"
       Failure(:record_invalid)
     rescue StandardError => e
-      Rails.logger.error "[TwilioWebhook::HandleReply] Error processing reply from #{from}: #{e.message}"
+      Rails.logger.error "[TwilioWebhook::HandleReply] Error processing reply from #{from}: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
       Failure(:processing_error)
     end
 
     private
 
-    attr_reader :account, :body, :customer, :from_phone
-
-    def active_conversation
-      account.whatsapp_conversations.active.open.find_by(from_phone: from_phone)
-    end
-
-    def find_customer
+    def find_customer(account:, from_phone:)
       account.customers.find_by("regexp_replace(phone, '[^0-9]', '', 'g') = ?", from_phone)
     end
 
-    def log_inbound(customer: nil, booking: nil)
-      MessageLog.create!(
-        account: account,
-        customer: customer,
-        booking: booking,
+    def active_conversation(account:, from_phone:)
+      account.whatsapp_conversations.active.open.find_by(from_phone:)
+    end
+
+    def log_inbound(account:, customer: nil, booking: nil, body:)
+      account.message_logs.create!(
+        customer:,
+        booking:,
         channel: "whatsapp",
         direction: "inbound",
-        body: body,
+        body:,
         status: "delivered"
       )
     end

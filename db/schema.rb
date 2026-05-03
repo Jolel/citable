@@ -10,12 +10,14 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_26_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_01_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
   create_table "accounts", force: :cascade do |t|
+    t.string "address"
     t.boolean "ai_nlu_enabled", default: false, null: false
+    t.jsonb "business_hours", default: {}, null: false
     t.datetime "created_at", null: false
     t.string "locale", default: "es-MX", null: false
     t.string "name", null: false
@@ -117,6 +119,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_26_000000) do
     t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
     t.integer "deposit_amount_cents", default: 0, null: false
+    t.text "description"
     t.integer "duration_minutes", default: 60, null: false
     t.string "name", null: false
     t.integer "price_cents", default: 0, null: false

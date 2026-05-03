@@ -52,16 +52,16 @@ RSpec.describe "Webhooks::Twilio", type: :request do
         expect(booking.reload).to be_confirmed
       end
 
-      it "creates an inbound MessageLog" do
+      it "creates an inbound MessageLog plus an outbound confirmation ack" do
         expect {
           post_twilio(from: "whatsapp:+5215512345678", body: "1")
-        }.to change(MessageLog, :count).by(1)
+        }.to change(MessageLog, :count).by(2)
 
-        log = MessageLog.last
-        expect(log.direction).to eq("inbound")
-        expect(log.channel).to eq("whatsapp")
-        expect(log.body).to eq("1")
-        expect(log.status).to eq("delivered")
+        inbound = MessageLog.inbound.last
+        expect(inbound.direction).to eq("inbound")
+        expect(inbound.channel).to eq("whatsapp")
+        expect(inbound.body).to eq("1")
+        expect(inbound.status).to eq("delivered")
       end
     end
 
@@ -71,10 +71,10 @@ RSpec.describe "Webhooks::Twilio", type: :request do
         expect(booking.reload).to be_cancelled
       end
 
-      it "creates an inbound MessageLog" do
+      it "creates an inbound MessageLog plus an outbound cancellation ack" do
         expect {
           post_twilio(from: "whatsapp:+5215512345678", body: "2")
-        }.to change(MessageLog, :count).by(1)
+        }.to change(MessageLog, :count).by(2)
       end
     end
 
@@ -85,10 +85,13 @@ RSpec.describe "Webhooks::Twilio", type: :request do
         }.not_to change { booking.reload.status }
       end
 
-      it "still logs the inbound message" do
+      it "logs the inbound message and sends a fallback so the bot is never silent" do
         expect {
           post_twilio(from: "whatsapp:+5215512345678", body: "hola")
-        }.to change(MessageLog, :count).by(1)
+        }.to change(MessageLog, :count).by(2)
+
+        outbound = MessageLog.outbound.last
+        expect(outbound.body).to include("Tienes una cita el")
       end
     end
 

@@ -2,9 +2,57 @@
 
 ## Current Focus
 
-WhatsApp guided booking flow implemented (staged, not yet merged). Each business now has its own `whatsapp_number` on `Account`; inbound messages map the `To` field to an account and walk the customer through service → datetime → address (if needed) → confirmation. The booking calendar (`Day` + `Week` views, drag-and-drop) was completed in the previous phase.
+Hexagonal architecture pilot (LLM) complete on `feat/ai-nlu-phase1`. Infrastructure layer introduced with `Llm::Port`, `Llm::Response`, `Llm::GeminiAdapter`, and `Citable::Container`. All three LLM application services (`NluParser`, `QuestionClassifier`, `GreetingGenerator`) now return `Success(hash)` / `Failure(:tag)` via dry-monads rather than nil-or-struct. Dry::Struct `Result` wrapper classes removed from application services; token metadata lives inline in the Success hash. Next step: replicate the pattern for WhatsApp/Twilio (outbound port + adapter).
 
 ## What Was Just Built
+
+### Hexagonal Infrastructure Layer — LLM Pilot (feat/ai-nlu-phase1)
+
+#### New files
+- `lib/citable/container.rb` — `Citable::Container` (dry-container), `"infrastructure.llm"` registered
+- `lib/citable/types.rb` — `Citable::Types` (dry-types)
+- `app/infrastructure/llm/port.rb` — abstract `Llm::Port` + `Llm::Port::Error`
+- `app/infrastructure/llm/response.rb` — `Llm::Response` (Dry::Struct)
+- `app/infrastructure/llm/gemini_adapter.rb` — `Llm::GeminiAdapter < Llm::Port`
+- `config/initializers/container.rb` — to_prepare hook
+- `spec/infrastructure/llm/{gemini_adapter,port_contract}_spec.rb`
+- `spec/support/container_helpers.rb`
+
+#### Modified
+- `Llm::NluParser`, `Llm::QuestionClassifier`, `Llm::GreetingGenerator` — accept `llm:` kwarg; return `Success(hash)` / `Failure(:tag)`; no Dry::Struct Result wrapper
+- `TwilioWebhook::AdvanceConversation`, `TwilioWebhook::StartConversation` — unwrap via `.success?` / `.value!`; `record_ai_usage` takes plain hash
+
+#### Deleted
+- `app/services/llm/client.rb` + `spec/services/llm/client_spec.rb`
+
+#### Gems added
+- `dry-container`, `dry-auto_inject`, `dry-struct`
+
+### AI NLU Phase 2 — Question Answering (feat/ai-nlu-phase1)
+
+#### Migration (`db/migrate/20260430000000_add_question_answering_fields.rb`)
+- Adds `services.description` (text, nullable) — surfaced when answering "qué servicios tienen" and price/duration questions.
+- Adds `accounts.business_hours` (jsonb, default `{}`) — keyed by `mon..sun` with values `["09:00","19:00"]` for open days or `nil` for closed.
+
+#### Services
+- `Llm::QuestionClassifier` — single Gemini call returning `{ intent, service_index, confidence }`. Intents: `services_list`, `price`, `duration`, `hours` (answerable) plus `booking`, `other` (fall through). Same 0.8 confidence threshold and silent-fallback contract as `Llm::NluParser`.
+- `TwilioWebhook::AnswerQuestion` — pure-Ruby Spanish renderer. No LLM call; reads `Service` and `Account#business_hours` and always appends "¿Quieres reservar una cita?". Eliminates hallucination risk.
+- `TwilioWebhook::StartConversation` — accepts `body:`; if AI is enabled and the classifier returns a question intent, sends the answer via `Whatsapp::MessageSender` and returns `Success(:answered_question)` **without creating a `WhatsappConversation`** so the next message can either ask another question or start booking. Stamps token usage on the inbound `MessageLog` via the existing `record_ai_usage` helper.
+- `TwilioWebhook::HandleReply` — passes `body:` through to `StartConversation`.
+
+#### Dashboard surfaces
+- `Dashboard::ServicesController` strong params + `_form.html.erb` expose `Service#description`.
+- `Dashboard::SettingsController` + `settings/show.html.erb` expose a weekly hours editor (open/close `<input type="time">` per weekday + "Cerrado" checkbox); `normalize_business_hours` collapses the nested params into the storage shape.
+
+#### Specs (374 examples, all green)
+- `spec/services/llm/question_classifier_spec.rb` (new)
+- `spec/services/twilio_webhook/answer_question_spec.rb` (new)
+- `spec/services/twilio_webhook/start_conversation_spec.rb` (extended with question-branch examples)
+
+#### Documentation
+- `docs/manual-local.md` updated with verification item #10, a new "Question answering before booking" subsection under section 8, and two troubleshooting entries.
+
+### WhatsApp Guided Booking Flow (staged on main)
 
 ### WhatsApp Guided Booking Flow (staged on main)
 
@@ -56,7 +104,6 @@ WhatsApp guided booking flow implemented (staged, not yet merged). Each business
 
 ### Config
 - `config/initializers/devise.rb` — standard Devise config, es-MX mailer
-- `config/initializers/acts_as_tenant.rb` — require_tenant = true
 - `config/initializers/money.rb` — MXN default currency
 - `config/queue.yml` — 3 named queues: reminders, notifications, default
 - `config/recurring.yml` — `RenewGoogleWatchJob` runs daily at 2am
@@ -92,6 +139,11 @@ Creates: Account "Estudio de Ana", owner user ana@example.com, staff maria@examp
 - Write RSpec tests, especially cross-tenant isolation tests
 
 ## Active Decisions
+
+- **Question answering now runs both before and during a booking conversation.** `AdvanceConversation#call` intercepts FAQ questions (price, duration, services list, hours) before dispatching to the step handler. It answers the question, re-sends the current step prompt, and returns `Success(:answered_question)` without advancing the step. Confirmation digits `"1"`/`"2"` bypass the classifier (fast path). Non-question intents (`booking`, `cancel`, `other`, LLM failure) fall through to the step handler unchanged. Legacy confirm/cancel flow is unaffected.
+- **LLM classifies, Ruby renders.** `Llm::QuestionClassifier` returns a structured intent + service index; `TwilioWebhook::AnswerQuestion` formats the answer from the database. No LLM-generated free-text in answers — eliminates hallucination and keeps token cost low.
+- **Question-branch answers do not create `WhatsappConversation` rows.** Keeps Q&A stateless so the next message can either ask another question or start booking naturally.
+- **Question scope v1: services list/descriptions, price, duration, business hours.** Location/address answers were explicitly deferred (no `Account#address` field added).
 
 - **Each business has its own `Account.whatsapp_number`** (normalized digits only, unique). Inbound `To` is matched against this column; unknown numbers are silently ignored (return 200).
 - **WhatsApp conversation state lives in `whatsapp_conversations`**, not in `Customer` or session. Expires after 30 min inactivity. A customer can have at most one active open conversation per account.

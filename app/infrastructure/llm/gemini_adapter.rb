@@ -4,18 +4,18 @@ require "net/http"
 require "json"
 
 module Llm
-  class Client
-    Error = Class.new(StandardError)
-
-    # Override the model at runtime via credentials (gemini.model).
-    # Verify the current model ID at https://ai.google.dev/gemini-api/docs/models
-    DEFAULT_MODEL = "gemini-2.0-flash"
+  # Gemini implementation of the Llm::Port contract.
+  # Override the model at runtime via credentials (gemini.model).
+  # Verify the current model ID at https://ai.google.dev/gemini-api/docs/models
+  class GeminiAdapter < Port
+    DEFAULT_MODEL = "gemini-2.5-pro"
     TIMEOUT       = 4 # seconds
 
-    def self.call(...) = new.call(...)
+    def initialize(api_key: nil, model: nil)
+      @api_key_override = api_key
+      @model_override   = model
+    end
 
-    # Returns { content: Hash, input_tokens: Integer, output_tokens: Integer, model: String }
-    # Raises Llm::Client::Error on network failure, timeout, or bad response.
     def call(system:, user:, schema:)
       raw = post(system: system, user: user, schema: schema)
       parse(raw)
@@ -24,7 +24,9 @@ module Llm
     private
 
     def model
-      Rails.application.credentials.dig(:gemini, :model).presence || DEFAULT_MODEL
+      @model_override.presence ||
+        Rails.application.credentials.dig(:gemini, :model).presence ||
+        DEFAULT_MODEL
     end
 
     def endpoint
@@ -32,7 +34,8 @@ module Llm
     end
 
     def api_key
-      @api_key ||= Rails.application.credentials.dig(:gemini, :api_key).presence ||
+      @api_key ||= @api_key_override.presence ||
+        Rails.application.credentials.dig(:gemini, :api_key).presence ||
         raise(Error, "Gemini API key not configured (credentials.gemini.api_key)")
     end
 
@@ -77,12 +80,12 @@ module Llm
       content = JSON.parse(text)
       usage   = data["usageMetadata"] || {}
 
-      {
+      Llm::Response.new(
         content:       content,
         input_tokens:  usage["promptTokenCount"].to_i,
         output_tokens: usage["candidatesTokenCount"].to_i,
         model:         model
-      }
+      )
     rescue JSON::ParserError => e
       raise Error, "Gemini returned invalid JSON: #{e.message}"
     end

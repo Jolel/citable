@@ -8,7 +8,7 @@
 - **Cache**: Solid Cache (Rails 8 default)
 - **Styling**: TailwindCSS via tailwindcss-rails gem
 - **Auth**: Devise 5.x
-- **Multi-tenancy**: acts_as_tenant 1.x (row-level, scoped on account_id)
+- **Multi-tenancy**: Manual — all tenant-scoped queries use `current_user.account` as the account boundary; no gem
 - **WhatsApp**: twilio-ruby (Twilio WhatsApp Business API)
 - **Payments**: Cash on arrival; no online payment provider integration
 - **Email**: resend gem (transactional fallback)
@@ -18,7 +18,6 @@
 ## Key Gems Added
 ```
 gem "devise"
-gem "acts_as_tenant"
 gem "twilio-ruby"
 gem "resend"
 gem "money-rails"

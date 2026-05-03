@@ -21,6 +21,7 @@ By the end, you should be able to:
 7. Receive a WhatsApp reply through the Twilio webhook.
 8. Send a free-text date such as "el viernes a las 3" and have the AI NLU parser resolve it to a real datetime.
 9. Receive a personalized AI-generated greeting when a conversation starts, and confirm "dale" or "sí" are accepted at the confirmation step.
+10. Ask a free-text question over WhatsApp (e.g. *"¿qué servicios tienen?"*, *"¿cuánto cuesta el corte?"*, *"¿a qué hora abren?"*) and receive a deterministic Spanish answer drawn from business data — without starting a booking conversation.
 
 Twilio is required only for WhatsApp testing. A Gemini API key is required only for AI NLU testing. You can run the app and test Google Calendar without either.
 
@@ -358,6 +359,42 @@ Rigid `1` / `2` are tried first; the LLM only fires for anything else. Below 0.8
 
 All three LLM calls share the same 4-second timeout and silent fallback — the conversation never breaks if the Gemini API is slow or unavailable.
 
+**4. Question answering before booking (`Llm::QuestionClassifier` + `TwilioWebhook::AnswerQuestion`)**
+
+When the customer's first message is a question instead of a booking attempt, the app answers it from business data and offers to book — **without** creating a `WhatsappConversation` row, so the next message can either ask another question or start the normal booking flow.
+
+The classifier returns one of these intents (≥ 0.8 confidence required, otherwise falls through to the booking greeting):
+
+| Intent | Example messages | Answer source |
+|---|---|---|
+| `services_list` | *"¿qué servicios tienen?"*, *"qué hacen"*, *"menú"* | Active services with name, price, duration, and `Service#description` if set |
+| `price` | *"¿cuánto cuesta el corte?"*, *"precio del tinte"* | Named service's `price` and `duration_label` (or the full list if no service mentioned) |
+| `duration` | *"¿cuánto tarda el corte?"* | Named service's `duration_label` |
+| `hours` | *"¿a qué hora abren?"*, *"horarios"* | `Account#business_hours` rendered as a weekly summary in Spanish |
+
+Every answer ends with *"¿Quieres reservar una cita?"* so the customer knows how to proceed. Intents `booking` and `other` (or anything below 0.8 confidence) fall through to the existing greeting + service list.
+
+The LLM only **classifies** the question — Ruby renders the answer deterministically from the database, so there are no hallucinations.
+
+**Configure the data the answers depend on:**
+
+- *Service descriptions:* Dashboard → **Servicios** → edit a service → fill **Descripción**.
+- *Business hours:* Dashboard → **Configuración** → **Horarios de atención** → set open/close times per weekday or check **Cerrado**.
+
+To test from WhatsApp:
+
+1. Make sure `ai_nlu_enabled` is true for the account, the Gemini key is set, and `bin/dev` + `ngrok` are running.
+2. From a phone with **no active WhatsApp conversation and no upcoming booking**, send *"¿qué servicios tienen?"*. Expect the services list with descriptions/prices and the booking CTA.
+3. Send *"¿cuánto cuesta el corte?"* — expect a price + duration sentence.
+4. Send *"¿a qué hora abren?"* — expect the weekly hours summary (if not configured, the bot says it hasn't published hours yet).
+5. Confirm in the Rails console that **no** `WhatsappConversation` was created for those turns:
+   ```ruby
+   Account.find_by(name: "Estudio de Ana").whatsapp_conversations.where(from_phone: "<your-phone>").count
+   ```
+6. Then send *"hola, quiero un corte mañana a las 3"* — the classifier returns `booking`, the bot falls through and starts the normal booking flow.
+
+Token usage is logged on the inbound `MessageLog` for each Q&A turn (`ai_input_tokens`, `ai_output_tokens`, `ai_model`), the same way as the other AI features.
+
 **Enabling or disabling AI for an account:**
 
 ```ruby
@@ -507,6 +544,19 @@ Check in order:
 - Confirm `ai_nlu_enabled` is true.
 - Check `log/development.log` for `[Llm::NluParser] parse_confirmation failed` lines.
 - If Gemini returns low confidence (< 0.8), the bot re-prompts with "Responde 1 para confirmar o 2 para cancelar." — `1` and `2` always work regardless of AI status.
+
+**Question (e.g. *"¿qué servicios tienen?"*) starts the booking flow instead of being answered:**
+
+- The Q&A branch only runs when there is **no active `WhatsappConversation` and no active upcoming booking** for the customer. If you already have an in-progress conversation, send any "out" message to let it expire (30 min) or clear it manually:
+  ```ruby
+  Account.find_by(name: "Estudio de Ana").whatsapp_conversations.where(from_phone: "<your-phone>").destroy_all
+  ```
+- Confirm `ai_nlu_enabled` is true and the Gemini key is set — without them, every message falls straight into the booking greeting.
+- Check `log/development.log` for `[Llm::QuestionClassifier] failed` warnings. Below 0.8 confidence, intents `booking`/`other`, or LLM errors all fall through to the booking flow by design.
+
+**Hours answer says "Aún no hemos publicado nuestros horarios":**
+
+- `Account#business_hours` is empty. Set it in **Configuración → Horarios de atención**.
 
 ---
 
