@@ -5,13 +5,26 @@ class WhatsappSendJob < ApplicationJob
 
   queue_as :notifications
 
+  KIND_TO_LOG = {
+    confirmation: "confirmation",
+    "24h":        "reminder_24h",
+    "2h":         "reminder_2h"
+  }.freeze
+
   def perform(booking_id, kind)
     booking = Booking.find_by(id: booking_id)
     return unless booking
     return if booking.account.whatsapp_quota_exceeded?
 
     message_body = build_message(booking, kind)
-    send_message(to: booking.customer.phone, body: message_body, booking: booking)
+    return if message_body.blank?
+
+    send_message(
+      to:      booking.customer.phone,
+      body:    message_body,
+      booking: booking,
+      kind:    KIND_TO_LOG[kind.to_sym]
+    )
   end
 
   private
@@ -31,13 +44,14 @@ class WhatsappSendJob < ApplicationJob
     end
   end
 
-  def send_message(to:, body:, booking:)
+  def send_message(to:, body:, booking:, kind:)
     result = Whatsapp::MessageSender.call(
-      account: booking.account,
-      booking: booking,
+      account:  booking.account,
+      booking:  booking,
       customer: booking.customer,
-      to: to,
-      body: body
+      to:       to,
+      body:     body,
+      kind:     kind
     )
 
     case result

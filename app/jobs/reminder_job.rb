@@ -7,6 +7,7 @@ class ReminderJob < ApplicationJob
     booking = Booking.find_by(id: booking_id)
     return unless booking
     return if booking.cancelled?
+    return if booking.starts_at <= Time.current
 
     schedule = booking.reminder_schedules.find_by(kind: kind)
     return if schedule&.sent?
@@ -40,11 +41,16 @@ class ReminderJob < ApplicationJob
                       .in_time_zone(booking.account.timezone)
                       .strftime("%A %d de %B a las %H:%M")
 
+    safe_owner_name    = CGI.escapeHTML(owner.display_name.to_s)
+    safe_customer_name = CGI.escapeHTML(booking.customer.name.to_s)
+    safe_phone         = CGI.escapeHTML(booking.customer.phone.to_s)
+    safe_time          = CGI.escapeHTML(time_str.to_s)
+
     html_body = <<~HTML
-      <p>Hola #{owner.display_name} 👋</p>
-      <p>No pudimos enviar el recordatorio de WhatsApp a <strong>#{booking.customer.name}</strong>
-      (#{booking.customer.phone}) porque alcanzaste tu límite mensual de mensajes.</p>
-      <p>Su cita es el <strong>#{time_str}</strong>.</p>
+      <p>Hola #{safe_owner_name} 👋</p>
+      <p>No pudimos enviar el recordatorio de WhatsApp a <strong>#{safe_customer_name}</strong>
+      (#{safe_phone}) porque alcanzaste tu límite mensual de mensajes.</p>
+      <p>Su cita es el <strong>#{safe_time}</strong>.</p>
       <p>Te recomendamos contactarle directamente para confirmar.</p>
       <p>— El equipo de Citable</p>
     HTML
@@ -63,7 +69,8 @@ class ReminderJob < ApplicationJob
       channel:   "email",
       direction: "outbound",
       body:      subject,
-      status:    result[:id].present? ? "sent" : "failed"
+      status:    result[:id].present? ? "sent" : "failed",
+      kind:      "reminder_email_fallback"
     )
 
     Rails.logger.info "[ReminderJob] Email fallback sent to #{owner.email} for booking #{booking.id}"
@@ -75,8 +82,9 @@ class ReminderJob < ApplicationJob
       customer:  booking.customer,
       channel:   "email",
       direction: "outbound",
-      body:      subject || "email reminder",
-      status:    "failed"
+      body:      (defined?(subject) && subject) || "email reminder",
+      status:    "failed",
+      kind:      "reminder_email_fallback"
     )
   end
 end

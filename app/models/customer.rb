@@ -5,7 +5,9 @@ class Customer < ApplicationRecord
   has_many :bookings, dependent: :destroy
   has_many :message_logs, dependent: :destroy
 
-  validates :name, presence: true
+  validates :name, presence: true,
+                   length: { maximum: 80 },
+                   format: { without: /[<>]/, message: "no puede contener < o >" }
   validates :phone, presence: true,
                     format: { with: /\A\+?[\d\s\-().]+\z/, message: "formato inválido" }
 

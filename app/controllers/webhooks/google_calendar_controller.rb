@@ -4,7 +4,7 @@ class Webhooks::GoogleCalendarController < ActionController::Base
   protect_from_forgery with: :null_session
 
   # POST /webhooks/google_calendar
-  def receive
+  def create
     expected_token = Rails.application.credentials.google&.webhook_token
     received_token = request.headers["X-Goog-Channel-Token"]
 
@@ -51,7 +51,10 @@ class Webhooks::GoogleCalendarController < ActionController::Base
   end
 
   def process_event(user, event)
-    booking = Booking.find_by(google_event_id: event.id)
+    # Scope by the channel-resolving user's account AND user_id so a foreign
+    # tenant cannot plant a Google event with an id that collides with one of
+    # this booking's google_event_id and steer subsequent syncs.
+    booking = user.account.bookings.find_by(google_event_id: event.id, user_id: user.id)
     return unless booking
 
     if event.status == "cancelled"

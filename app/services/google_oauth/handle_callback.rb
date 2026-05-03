@@ -6,15 +6,29 @@ module GoogleOauth
 
     def self.call(...) = new.call(...)
 
-    def call(state:, code:, redirect_uri:, account:, current_user:, webhook_url: nil)
+    def call(state:, code:, redirect_uri:, account:, current_user:, session_nonce:, webhook_url: nil)
       VerifyStateToken.call(state)
-        .bind { |state_data| authorize(state_data, account, current_user) }
+        .bind { |state_data| authorize(state_data, account, current_user, session_nonce) }
         .bind { |user, state_data| connect(user, code, redirect_uri, webhook_url, state_data[:return_to]) }
     end
 
     private
 
-    def authorize(state_data, account, current_user)
+    # Reject the callback unless the signed state token's initiator_id and
+    # nonce both match the current session. This blocks the audit's confused
+    # deputy: an attacker minting a state token bound to their own user_id
+    # and tricking the owner into completing the consent flow.
+    def authorize(state_data, account, current_user, session_nonce)
+      if state_data[:initiator_id] != current_user.id
+        return Failure(:state_initiator_mismatch)
+      end
+
+      stored_nonce = session_nonce.to_s
+      provided_nonce = state_data[:nonce].to_s
+      if stored_nonce.blank? || !ActiveSupport::SecurityUtils.secure_compare(provided_nonce, stored_nonce)
+        return Failure(:state_nonce_mismatch)
+      end
+
       user = account.users.find_by(id: state_data[:user_id])
       return Failure(:user_not_found) unless user
 

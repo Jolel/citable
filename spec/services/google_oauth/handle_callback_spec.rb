@@ -3,14 +3,21 @@
 require "rails_helper"
 
 RSpec.describe GoogleOauth::HandleCallback do
-  let(:account)      { create(:account) }
-  let(:owner)        { create(:user, :owner, account: account) }
-  let(:staff)        { create(:user, account: account) }
-  let(:redirect_uri) { "https://app.example.com/oauth/callback" }
-  let(:code)         { "auth_code_abc" }
+  let(:account)       { create(:account) }
+  let(:owner)         { create(:user, :owner, account: account) }
+  let(:staff)         { create(:user, account: account) }
+  let(:redirect_uri)  { "https://app.example.com/oauth/callback" }
+  let(:code)          { "auth_code_abc" }
+  let(:nonce)         { "n0nc3-abc" }
+  let(:session_nonce) { nonce }
 
-  def valid_state(user_id:, return_to: "/dashboard")
-    GoogleOauth::BuildStateToken.call(user_id: user_id, return_to: return_to).value!
+  def valid_state(user_id:, initiator:, return_to: "/dashboard", state_nonce: nonce)
+    GoogleOauth::BuildStateToken.call(
+      user_id:      user_id,
+      return_to:    return_to,
+      initiator_id: initiator.id,
+      nonce:        state_nonce
+    ).value!
   end
 
   let(:connect_success) { Dry::Monads::Success({ user: staff, return_to: "/dashboard" }) }
@@ -23,11 +30,12 @@ RSpec.describe GoogleOauth::HandleCallback do
     context "with a valid state and owner as current_user" do
       it "returns Success with user and return_to" do
         result = described_class.call(
-          state:        valid_state(user_id: staff.id),
-          code:         code,
-          redirect_uri: redirect_uri,
-          account:      account,
-          current_user: owner
+          state:         valid_state(user_id: staff.id, initiator: owner),
+          code:          code,
+          redirect_uri:  redirect_uri,
+          account:       account,
+          current_user:  owner,
+          session_nonce: session_nonce
         )
         expect(result).to be_success
         expect(result.value![:user]).to eq(staff)
@@ -38,11 +46,12 @@ RSpec.describe GoogleOauth::HandleCallback do
     context "with a valid state where staff connects their own calendar" do
       it "returns Success" do
         result = described_class.call(
-          state:        valid_state(user_id: staff.id),
-          code:         code,
-          redirect_uri: redirect_uri,
-          account:      account,
-          current_user: staff
+          state:         valid_state(user_id: staff.id, initiator: staff),
+          code:          code,
+          redirect_uri:  redirect_uri,
+          account:       account,
+          current_user:  staff,
+          session_nonce: session_nonce
         )
         expect(result).to be_success
       end
@@ -51,24 +60,54 @@ RSpec.describe GoogleOauth::HandleCallback do
     context "when the state token is invalid" do
       it "returns Failure(:invalid_state)" do
         result = described_class.call(
-          state:        "bad.token",
-          code:         code,
-          redirect_uri: redirect_uri,
-          account:      account,
-          current_user: owner
+          state:         "bad.token",
+          code:          code,
+          redirect_uri:  redirect_uri,
+          account:       account,
+          current_user:  owner,
+          session_nonce: session_nonce
         )
         expect(result).to be_failure.and(have_attributes(failure: :invalid_state))
+      end
+    end
+
+    context "when the initiator_id in the state does not match current_user" do
+      it "returns Failure(:state_initiator_mismatch)" do
+        result = described_class.call(
+          state:         valid_state(user_id: staff.id, initiator: staff),
+          code:          code,
+          redirect_uri:  redirect_uri,
+          account:       account,
+          current_user:  owner,
+          session_nonce: session_nonce
+        )
+        expect(result).to be_failure.and(have_attributes(failure: :state_initiator_mismatch))
+      end
+    end
+
+    context "when the session nonce does not match the state nonce" do
+      it "returns Failure(:state_nonce_mismatch)" do
+        result = described_class.call(
+          state:         valid_state(user_id: staff.id, initiator: owner, state_nonce: "from_state"),
+          code:          code,
+          redirect_uri:  redirect_uri,
+          account:       account,
+          current_user:  owner,
+          session_nonce: "different"
+        )
+        expect(result).to be_failure.and(have_attributes(failure: :state_nonce_mismatch))
       end
     end
 
     context "when the user_id in the state does not belong to the account" do
       it "returns Failure(:user_not_found)" do
         result = described_class.call(
-          state:        valid_state(user_id: 999_999),
-          code:         code,
-          redirect_uri: redirect_uri,
-          account:      account,
-          current_user: owner
+          state:         valid_state(user_id: 999_999, initiator: owner),
+          code:          code,
+          redirect_uri:  redirect_uri,
+          account:       account,
+          current_user:  owner,
+          session_nonce: session_nonce
         )
         expect(result).to be_failure.and(have_attributes(failure: :user_not_found))
       end
@@ -79,11 +118,12 @@ RSpec.describe GoogleOauth::HandleCallback do
 
       it "returns Failure(:access_denied)" do
         result = described_class.call(
-          state:        valid_state(user_id: other_staff.id),
-          code:         code,
-          redirect_uri: redirect_uri,
-          account:      account,
-          current_user: staff
+          state:         valid_state(user_id: other_staff.id, initiator: staff),
+          code:          code,
+          redirect_uri:  redirect_uri,
+          account:       account,
+          current_user:  staff,
+          session_nonce: session_nonce
         )
         expect(result).to be_failure.and(have_attributes(failure: :access_denied))
       end
@@ -97,11 +137,12 @@ RSpec.describe GoogleOauth::HandleCallback do
 
       it "propagates the failure" do
         result = described_class.call(
-          state:        valid_state(user_id: staff.id),
-          code:         code,
-          redirect_uri: redirect_uri,
-          account:      account,
-          current_user: owner
+          state:         valid_state(user_id: staff.id, initiator: owner),
+          code:          code,
+          redirect_uri:  redirect_uri,
+          account:       account,
+          current_user:  owner,
+          session_nonce: session_nonce
         )
         expect(result).to be_failure.and(have_attributes(failure: :authorization_failed))
       end

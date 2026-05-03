@@ -81,6 +81,25 @@
 
 ## Recently Built
 
+- Security audit fixes (2026-05-02) — 15 findings closed in one bundled change:
+  - **HIGH** Public account resolution → `/r/:account_whatsapp/...` (was `Account.order(:id).first`)
+  - **HIGH** Confirmation IDOR → `confirmation_token` column (`has_secure_token`); URL is `/confirmada/:token`
+  - **HIGH** Public mass-assignment → drop `:user_id`/`:service_id` from permit; re-resolve service through `@account.services.active`; auto-pick staff via new `PublicBookings::StaffPicker`
+  - **HIGH** Reply hijack → `MessageLog.kind` column + `HandleReply#resolve_reply_booking` binds 1/2 to the most recent outbound prompt for the customer (36h window), not earliest by `starts_at`
+  - **HIGH** Dashboard cross-tenant FKs → `Dashboard::BookingsController#scoped_associations` re-resolves customer/service/user/recurrence_rule via `current_account` collections; `:status` removed from permit; new `mark_completed!`/`mark_no_show!` member actions
+  - **MEDIUM** Production HTTPS/HSTS → `config.assume_ssl`/`config.force_ssl`/`ssl_options` now active in production.rb; new `config/initializers/session_store.rb` with Secure+SameSite=Lax+HttpOnly
+  - **MEDIUM** Twilio fail-closed → token re-read from credentials per request (no class-load capture); blank token returns 503; new `config/initializers/twilio.rb` boot-time assertion
+  - **MEDIUM** Email injection in reminder → unsanitized interpolation replaced with `CGI.escapeHTML` for owner name, customer name, phone, and time; `Customer#name` validation rejects `<` and `>`, caps length at 80
+  - **MEDIUM** OAuth confused deputy → state token now binds `initiator_id` + `nonce` + `iat`; callback rejects on mismatch or expiry; `connect` route is now `POST` (CSRF-protected); session stores per-flow nonce; `extract_path` rejects non-`/dashboard/` redirects
+  - **MEDIUM** Backdated bookings → `Booking#starts_at_in_future` validation on create; `schedule_reminder_jobs` skips past `wait_until`s; `ReminderJob#perform` no-ops on past bookings
+  - **MEDIUM** Staff password bypass → `:password`/`:password_confirmation` removed from update params; new `Dashboard::StaffController#reset_password` member action triggers Devise password-reset email; `:confirmable` enabled on User with `reconfirmable: true` so email change requires clicking a link in the new mailbox
+  - **MEDIUM** Services controller missing owner gate → new `Dashboard::OwnerOnly` concern; ServicesController applies it via `before_action :require_owner!, only: %i[new create edit update deactivate toggle_active]`; SettingsController and StaffController use the same concern
+  - **LOW** Booking status mass-assign → `:status` removed from `Dashboard::BookingsController#booking_params`; transitions only via `confirm`/`cancel`/`mark_completed`/`mark_no_show` member actions
+  - **LOW** Quota race → `Whatsapp::MessageSender` claims a quota slot via atomic `UPDATE ... WHERE quota_used < limit`; failed sends release the slot back; missing credentials fail before claim
+  - **LOW** Google webhook unscoped lookup → `process_event` now uses `user.account.bookings.find_by(google_event_id: ..., user_id: user.id)`; controller action renamed `receive` → `create` to match route; new unique partial index on `bookings(account_id, google_event_id)`
+- Migrations added: `20260502000001_add_confirmation_token_to_bookings`, `20260502000002_add_kind_to_message_logs`, `20260502000003_add_google_event_unique_index_to_bookings`, `20260502000004_add_devise_confirmable_to_users`
+
+
 - WhatsApp guided booking flow (staged on main, 2026-04-25):
   - `Account.whatsapp_number` — unique column; seeds set Ana's account to `14155238886`
   - `WhatsappConversation` model — guided steps, 30-min expiry, `active`/`open` scopes

@@ -114,8 +114,10 @@
       <p class="text-sm text-forest/50 mb-4">
         Conecta Google Calendar para sincronizar las citas automáticamente.
       </p>
-      <%= link_to connect_dashboard_google_oauth_path(user_id: @staff_member.id),
-          class: "inline-flex items-center gap-2 rounded-xl bg-[#4285F4] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3367d6] transition-colors" do %>
+      <%= button_to connect_dashboard_google_oauth_path(user_id: @staff_member.id),
+          method: :post,
+          data: { turbo: "false" },
+          class: "inline-flex items-center gap-2 rounded-xl bg-[#4285F4] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3367d6] transition-colors cursor-pointer" do %>
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
         </svg>

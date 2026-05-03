@@ -4,6 +4,7 @@ class MessageLog < ApplicationRecord
   CHANNELS = %w[whatsapp email].freeze
   DIRECTIONS = %w[outbound inbound].freeze
   STATUSES = %w[pending sent delivered failed].freeze
+  REPLY_PROMPT_KINDS = %w[reminder_24h reminder_2h confirmation].freeze
 
   belongs_to :account
   belongs_to :booking, optional: true
@@ -19,4 +20,5 @@ class MessageLog < ApplicationRecord
   scope :whatsapp, -> { where(channel: "whatsapp") }
   scope :email, -> { where(channel: "email") }
   scope :recent, -> { order(created_at: :desc) }
+  scope :reply_prompts, -> { where(kind: REPLY_PROMPT_KINDS) }
 end

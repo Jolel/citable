@@ -27,6 +27,9 @@ FactoryBot.define do
     trait :past do
       starts_at { 2.days.ago.change(hour: 10, min: 0) }
       ends_at { 2.days.ago.change(hour: 11, min: 0) }
+      # The starts_at_in_future validation runs only on :create, so persist
+      # past-dated fixtures by skipping validation rather than disabling the model rule.
+      to_create { |instance| instance.save(validate: false) }
     end
 
     trait :with_deposit do
