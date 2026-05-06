@@ -132,7 +132,7 @@ module TwilioWebhook
       services = account.services.active.order(:name).each_with_index.map do |svc, index|
         "#{index + 1}. #{svc.name} (#{svc.duration_label})"
       end
-      (["Elige un servicio:"] + services).join("\n")
+      ([ "Elige un servicio:" ] + services).join("\n")
     end
 
     def send_message(account:, to:, body:, customer: nil, booking: nil)
