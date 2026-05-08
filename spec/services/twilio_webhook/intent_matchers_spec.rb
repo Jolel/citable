@@ -148,6 +148,31 @@ RSpec.describe TwilioWebhook::IntentMatchers do
     end
   end
 
+  describe ".correction_intent?" do
+    [
+      "espera, mejor el viernes",
+      "mejor el sábado",
+      "cambia la fecha",
+      "cámbialo para el lunes",
+      "me equivoqué, quiero el tinte",
+      "ah no, mejor a las 5"
+    ].each do |body|
+      it "matches #{body.inspect}" do
+        expect(described_class.correction_intent?(body)).to be true
+      end
+    end
+
+    [
+      "Hola",
+      "quiero un corte el viernes",
+      "sí, confirmado"
+    ].each do |body|
+      it "does NOT match #{body.inspect}" do
+        expect(described_class.correction_intent?(body)).to be false
+      end
+    end
+  end
+
   describe ".affirmative?" do
     [
       "sí", "si", "Si", "SI", "Sí",

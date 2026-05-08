@@ -25,6 +25,8 @@ module TwilioWebhook
 
     CANCEL_WORDS = /\b(cancelar(?:me)?|cancela|cancelo|cancelaci[oó]n|anular|ya\s+no\s+(?:puedo|voy)|no\s+podr[eé](?:\s+ir)?|no\s+voy\s+a\s+poder|deseo\s+cancelar|quiero\s+cancelar|quisiera\s+cancelar)\b/i
 
+    CORRECTION_WORDS = /\b(espera|mejor|cambia|c[aá]mbial[oa]|corrige|me\s+equivoqu[eé]|ah\s+no)\b/i
+
     CONFIRM_YES = /\A\s*(s[ií](?:\s+(?:confirmo|me\s+queda(?:\s+(?:bien|perfecto))?))?|sip|sim[oó]n|claro|dale(?:\s+pues)?|va(?:\s+que\s+va)?|ok(?:ay)?|perfecto|de\s+acuerdo|confirmo|confirmar|confirmado|adelante|por\s+supuesto|listo|obvio|sale|me\s+queda(?:\s+(?:bien|perfecto))?|est[aá]\s+bien|me\s+parece\s+bien)[\s.!¡]*\z/i
 
     CONFIRM_NO = /\A\s*(no(?:\s+gracias)?|nop|nel(?:\s+pastel)?|nones|cancela|mejor\s+no|no\s+puedo|no\s+quiero)[\s.!¡]*\z/i
@@ -66,6 +68,10 @@ module TwilioWebhook
 
     def cancellation_intent?(body)
       CANCEL_WORDS.match?(body)
+    end
+
+    def correction_intent?(body)
+      CORRECTION_WORDS.match?(body)
     end
 
     def affirmative?(body)

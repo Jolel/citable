@@ -29,6 +29,7 @@ module TwilioWebhook
         when :address            then address_answer
         when :appointment_date   then appointment_date_answer(booking, customer)
         when :list_appointments  then list_appointments_answer(customer)
+        when :out_of_scope       then out_of_scope_answer
         else                          services_list_answer
         end
 
@@ -90,6 +91,10 @@ module TwilioWebhook
       return "Aún no hemos publicado nuestra dirección. Mándanos un mensaje y con gusto te la compartimos." if address.blank?
 
       "Estamos en: #{address}."
+    end
+
+    def out_of_scope_answer
+      "Esa pregunta no la puedo responder directamente — el equipo del negocio podrá ayudarte con gusto."
     end
 
     def appointment_date_answer(booking, customer)

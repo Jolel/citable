@@ -128,6 +128,20 @@ RSpec.describe TwilioWebhook::AnswerQuestion do
     end
   end
 
+  describe "out_of_scope" do
+    it "returns a graceful redirect message" do
+      msg = described_class.call(intent: :out_of_scope, service: nil, account: account, cta: nil)
+
+      expect(msg).to include("no la puedo responder directamente")
+    end
+
+    it "appends the CTA when supplied" do
+      msg = described_class.call(intent: :out_of_scope, service: nil, account: account, cta: "Elige un servicio:")
+
+      expect(msg).to include("Elige un servicio:")
+    end
+  end
+
   describe "list_appointments" do
     let(:customer) { create(:customer, account: account) }
     let(:user)     { create(:user, account: account) }
