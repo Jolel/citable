@@ -185,7 +185,7 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
       it "re-prompts without calling the LLM" do
         expect(Llm::NluParser).not_to receive(:parse_confirmation)
 
-        result = call(body: "dale", step: "confirming_booking")
+        result = call(body: "quizás", step: "confirming_booking")
 
         expect(result).to be_success.and(have_attributes(value!: :confirming_booking))
         expect(conversation.reload.step).to eq("confirming_booking")

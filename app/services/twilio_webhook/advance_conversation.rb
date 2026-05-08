@@ -136,8 +136,9 @@ module TwilioWebhook
         send_message("Perfecto, mantenemos tu cita del #{format_starts_at(booking.starts_at)}.", customer: conversation.customer, booking: booking)
         Success(:kept_booking)
       else
+        hint = account.ai_nlu_enabled? ? "Escribe *sí* para cancelarla o *no* para mantenerla." : "Responde 1 para cancelar o 2 para mantenerla."
         send_message(
-          "¿Seguro que quieres cancelar tu cita del #{format_starts_at(booking.starts_at)}? Responde 1 para confirmar la cancelación o 2 para mantenerla.",
+          "¿Seguro que quieres cancelar tu cita del #{format_starts_at(booking.starts_at)}? #{hint}",
           customer: conversation.customer,
           booking: booking
         )
@@ -150,10 +151,9 @@ module TwilioWebhook
     end
 
     def rigid_decision
-      case body
-      when "1" then :confirmed
-      when "2" then :cancelled
-      end
+      return :confirmed if body == "1" || IntentMatchers.affirmative?(body)
+      return :cancelled if body == "2" || IntentMatchers.negative?(body)
+      nil
     end
 
     def nlu_decision
@@ -183,7 +183,7 @@ module TwilioWebhook
         send_message("Sin problema, cancelé esta solicitud. Escríbenos de nuevo cuando quieras reservar.", customer: conversation.customer)
         Success(:cancelled)
       else
-        send_confirmation_prompt(prefix: confirmation_hint)
+        send_confirmation_prompt(prefix: "No entendí tu respuesta.")
         Success(:confirming_booking)
       end
     end
@@ -250,22 +250,41 @@ module TwilioWebhook
 
     def confirmation_hint
       if account.ai_nlu_enabled?
-        "Responde 1 o escribe sí para confirmar, 2 o no para cancelar."
+        "Escribe *sí* para confirmar o *no* si quieres cambiar algo."
       else
         "Responde 1 para confirmar o 2 para cancelar."
       end
     end
 
     def parse_datetime(value)
-      text = value.to_s.strip.downcase
+      # Normalize: downcase and strip "a las" / "a la" connectors
+      normalized = value.to_s.strip.downcase
+                        .gsub(/\ba\s+las?\b/, "")
+                        .gsub(/\s+/, " ")
+                        .strip
 
-      if text.match?(/\A(?:mañana|manana)\s+\d{1,2}:\d{2}\z/)
-        time = text.split.last
-        hour, minute = time.split(":").map(&:to_i)
-        return (Time.zone.today + 1.day).in_time_zone.change(hour: hour, min: minute)
+      if (m = normalized.match(/\A(?:mañana|manana)\s+(.+)\z/))
+        if (parsed = parse_loose_time(m[1].strip))
+          hour, minute = parsed
+          return (Time.zone.today + 1.day).in_time_zone.change(hour: hour, min: minute)
+        end
       end
 
       parse_with_format(value, "%Y-%m-%d %H:%M") || parse_with_format(value, "%d/%m/%Y %H:%M")
+    end
+
+    # Parses time strings like "5pm", "5:30pm", "17:00", "5:00", "17".
+    # Returns [hour, minute] in 24-hour format, or nil if unrecognized.
+    def parse_loose_time(str)
+      m = str.match(/\A(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\z/)
+      return unless m
+
+      hour   = m[1].to_i
+      minute = (m[2] || "0").to_i
+      suffix = m[3]
+      hour += 12 if suffix == "pm" && hour < 12
+      hour = 0   if suffix == "am" && hour == 12
+      [ hour, minute ]
     end
 
     def parse_with_format(value, format)
@@ -311,10 +330,18 @@ module TwilioWebhook
       %w[1 2].include?(body.to_s.strip)
     end
 
+    def awaiting_decision?
+      %w[confirming_booking confirming_cancellation].include?(conversation.step)
+    end
+
     # LLM-backed question classification — only runs when ai_nlu_enabled and
     # deterministic layer didn't match.
     # Returns Success(:answered_question) or nil.
     def maybe_answer_question
+      # Skip LLM classifier for obvious affirmative/negative responses — those
+      # belong to the confirmation flow, not question answering.
+      return nil if IntentMatchers.affirmative?(body) || IntentMatchers.negative?(body)
+
       answerable = Llm::QuestionClassifier::QUESTION_INTENTS +
                    Llm::QuestionClassifier::BOOKING_CONTEXT_INTENTS
 
@@ -352,7 +379,7 @@ module TwilioWebhook
       when "confirming_cancellation"
         booking = conversation.booking
         return nil unless booking
-        "Responde 1 para confirmar la cancelación o 2 para mantenerla."
+        account.ai_nlu_enabled? ? "Escribe *sí* para cancelarla o *no* para mantenerla." : "Responde 1 para cancelar o 2 para mantenerla."
       end
     end
 
@@ -364,11 +391,11 @@ module TwilioWebhook
     end
 
     def send_confirmation_prompt(prefix: nil)
-      starts_at = conversation.requested_starts_at.in_time_zone(account.timezone).strftime("%d/%m/%Y %H:%M")
+      time = conversation.requested_starts_at.in_time_zone(account.timezone)
       lines = []
       lines << prefix if prefix.present?
-      lines << "Confirma tu cita:"
-      lines << "#{conversation.service.name} - #{starts_at}"
+      lines << "¿Te queda bien esta cita? 😊"
+      lines << "*#{conversation.service.name}* — #{localized_appointment_str(time)}"
       lines << "Dirección: #{conversation.address}" if conversation.address.present?
       lines << confirmation_hint
       send_message(lines.join("\n"), customer: conversation.customer)
@@ -382,6 +409,12 @@ module TwilioWebhook
         booking: booking,
         customer: customer || conversation.customer
       )
+    end
+
+    def localized_appointment_str(time)
+      day   = I18n.t("date.day_names",   locale: :"es-MX")[time.wday]
+      month = I18n.t("date.month_names", locale: :"es-MX")[time.month]
+      "el #{day} #{time.day} de #{month} a las #{time.strftime("%H:%M")}"
     end
   end
 end

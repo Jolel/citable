@@ -116,7 +116,7 @@ RSpec.describe TwilioWebhook::ProcessBookingReply do
 
         log = account.message_logs.outbound.order(:created_at).last
         expect(log.body).to start_with("¿Seguro que quieres cancelar tu cita")
-        expect(log.body).to include("Responde 1 para confirmar la cancelación")
+        expect(log.body).to include("cancelarla")
       end
 
       it "leaves the booking pending" do

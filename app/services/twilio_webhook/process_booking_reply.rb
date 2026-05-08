@@ -142,10 +142,8 @@ module TwilioWebhook
         booking:    booking,
         step:       "confirming_cancellation"
       )
-      send_message(
-        "¿Seguro que quieres cancelar tu cita del #{format_starts_at}? " \
-          "Responde 1 para confirmar la cancelación o 2 para mantenerla."
-      )
+      hint = account.ai_nlu_enabled? ? "Escribe *sí* para cancelarla o *no* para mantenerla." : "Responde 1 para cancelar o 2 para mantenerla."
+      send_message("¿Seguro que quieres cancelar tu cita del #{format_starts_at}? #{hint}")
       Success(conversation)
     end
 
@@ -172,8 +170,11 @@ module TwilioWebhook
     end
 
     def fallback_message
-      "Tienes una cita el #{format_starts_at}. " \
-        "Responde 1 para confirmarla, 2 para cancelarla, o escribe tu pregunta."
+      if account.ai_nlu_enabled?
+        "Tienes una cita el #{format_starts_at}. ¿En qué te podemos ayudar?"
+      else
+        "Tienes una cita el #{format_starts_at}. Responde 1 para confirmarla, 2 para cancelarla, o escribe tu pregunta."
+      end
     end
 
     # ── helpers ───────────────────────────────────────────────────────────────
