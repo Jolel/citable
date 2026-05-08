@@ -131,7 +131,7 @@ module TwilioWebhook
       hash = result.value!
       return nil unless Llm::QuestionClassifier::POST_BOOKING_INTENTS.include?(hash[:intent].to_s)
 
-      record_ai_usage(hash)
+      TwilioWebhook::AiUsageRecorder.record(account: account, hash: hash)
       hash
     end
 
@@ -195,15 +195,6 @@ module TwilioWebhook
 
     def normalized_customer_phone
       Account.normalize_whatsapp_number(customer&.phone || booking.customer&.phone)
-    end
-
-    def record_ai_usage(hash)
-      log = account.message_logs.inbound.order(:created_at).last
-      log&.update_columns(
-        ai_input_tokens:  hash[:input_tokens],
-        ai_output_tokens: hash[:output_tokens],
-        ai_model:         hash[:model]
-      )
     end
   end
 end

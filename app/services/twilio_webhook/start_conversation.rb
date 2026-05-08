@@ -79,7 +79,7 @@ module TwilioWebhook
     end
 
     def answer_question(account:, phone:, customer:, question:)
-      record_ai_usage(account:, nlu_hash: question)
+      TwilioWebhook::AiUsageRecorder.record(account: account, hash: question)
       message = AnswerQuestion.call(
         intent: question[:intent], service: question[:service],
         account: account, customer: customer
@@ -124,7 +124,7 @@ module TwilioWebhook
       result = Llm::GreetingGenerator.call(account:, customer:)
       return unless result.success?
 
-      record_ai_usage(account:, nlu_hash: result.value!)
+      TwilioWebhook::AiUsageRecorder.record(account: account, hash: result.value!)
       result.value![:message]
     end
 
@@ -137,18 +137,6 @@ module TwilioWebhook
 
     def send_message(account:, to:, body:, customer: nil, booking: nil)
       Whatsapp::MessageSender.call(account:, to:, body:, customer:, booking:)
-    end
-
-    # ── LLM token logging ─────────────────────────────────────────────────────
-
-    # nlu_hash is a plain Hash with keys :input_tokens, :output_tokens, :model.
-    def record_ai_usage(account:, nlu_hash:)
-      log = account.message_logs.inbound.order(:created_at).last
-      log&.update_columns(
-        ai_input_tokens:  nlu_hash[:input_tokens],
-        ai_output_tokens: nlu_hash[:output_tokens],
-        ai_model:         nlu_hash[:model]
-      )
     end
   end
 end
