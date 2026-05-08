@@ -6,13 +6,15 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
   include Dry::Monads[:result]
 
   # Suppress outbound Twilio sends and calendar syncs throughout.
-  # Default QuestionClassifier stub: fall through (not a question) so that existing
-  # step-handler tests are unaffected. Q&A-specific contexts override this per-example.
+  # Default stubs:
+  #   - QuestionClassifier → fall through (not a question)
+  #   - BookingSlotExtractor → Failure so NLU tests must opt-in explicitly
   before do
     allow_any_instance_of(Whatsapp::MessageSender).to receive(:deliver).and_return(nil)
     allow(GoogleCalendarSyncJob).to receive(:perform_later)
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))
     allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:not_a_question))
+    allow(Llm::BookingSlotExtractor).to receive(:call).and_return(Failure(:llm_error))
   end
 
   let(:account)  { create(:account, ai_nlu_enabled: false) }
@@ -35,8 +37,8 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
     before { service } # ensure service exists
 
     context "when the customer types the numeric index" do
-      it "advances to awaiting_datetime without calling the LLM" do
-        expect(Llm::NluParser).not_to receive(:parse_service)
+      it "advances to awaiting_datetime without calling the extractor" do
+        expect(Llm::BookingSlotExtractor).not_to receive(:call)
         result = call(body: "1", step: "awaiting_service")
         expect(result).to be_success
         expect(conversation.reload.step).to eq("awaiting_datetime")
@@ -44,8 +46,8 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
     end
 
     context "when ai_nlu_enabled is false and input is unrecognized" do
-      it "re-prompts without calling the LLM" do
-        expect(Llm::NluParser).not_to receive(:parse_service)
+      it "re-prompts without calling the extractor" do
+        expect(Llm::BookingSlotExtractor).not_to receive(:call)
         result = call(body: "quiero un corte", step: "awaiting_service")
         expect(result).to be_success.and(have_attributes(value!: :awaiting_service))
         expect(conversation.reload.step).to eq("awaiting_service")
@@ -55,13 +57,19 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
     context "when ai_nlu_enabled is true and input is free text" do
       before { account.update!(ai_nlu_enabled: true) }
 
-      let(:nlu_success) do
-        Success({ value: service, input_tokens: 80, output_tokens: 15,
-                  model: Llm::GeminiAdapter::DEFAULT_MODEL })
+      def extractor_service_only
+        Success({
+          slots:          { service: service, starts_at: nil, address: nil, confirmation: nil },
+          confidences:    { service: 0.92, datetime: 0.0, address: 0.0, confirmation: 0.0 },
+          top_candidates: [],
+          input_tokens:   80,
+          output_tokens:  15,
+          model:          Llm::GeminiAdapter::DEFAULT_MODEL
+        })
       end
 
-      it "calls the NLU parser and advances to awaiting_datetime" do
-        allow(Llm::NluParser).to receive(:parse_service).and_return(nlu_success)
+      it "calls the slot extractor and advances to awaiting_datetime" do
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(extractor_service_only)
 
         result = call(body: "quiero un corte", step: "awaiting_service")
 
@@ -74,7 +82,7 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
         create(:message_log, account: account, customer: customer,
                channel: "whatsapp", direction: "inbound", body: "quiero un corte", status: "delivered")
 
-        allow(Llm::NluParser).to receive(:parse_service).and_return(nlu_success)
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(extractor_service_only)
         call(body: "quiero un corte", step: "awaiting_service")
 
         log = account.message_logs.inbound.order(:created_at).last
@@ -83,14 +91,213 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
         expect(log.ai_model).to eq(Llm::GeminiAdapter::DEFAULT_MODEL)
       end
 
-      context "when the NLU parser returns Failure (low confidence / error)" do
+      context "when the extractor returns Failure (low confidence / LLM error)" do
         it "re-prompts without advancing" do
-          allow(Llm::NluParser).to receive(:parse_service).and_return(Failure(:low_confidence))
+          allow(Llm::BookingSlotExtractor).to receive(:call).and_return(Failure(:llm_error))
 
           result = call(body: "no sé qué quiero", step: "awaiting_service")
 
           expect(result).to be_success.and(have_attributes(value!: :awaiting_service))
           expect(conversation.reload.step).to eq("awaiting_service")
+        end
+      end
+
+      context "when the message includes both service and datetime (multi-slot skip-ahead)" do
+        let(:parsed_time) { Time.zone.parse("2026-05-09T15:00:00") }
+
+        def extractor_multi_slot
+          Success({
+            slots:          { service: service, starts_at: parsed_time, address: nil, confirmation: nil },
+            confidences:    { service: 0.9, datetime: 0.88, address: 0.0, confirmation: 0.0 },
+            top_candidates: [],
+            input_tokens:   95,
+            output_tokens:  20,
+            model:          Llm::GeminiAdapter::DEFAULT_MODEL
+          })
+        end
+
+        it "skips awaiting_datetime and advances directly to confirming_booking" do
+          allow(Llm::BookingSlotExtractor).to receive(:call).and_return(extractor_multi_slot)
+
+          result = call(body: "quiero un corte el viernes a las 3", step: "awaiting_service")
+
+          expect(result).to be_success
+          expect(conversation.reload.step).to eq("confirming_booking")
+          expect(conversation.reload.service).to eq(service)
+          expect(conversation.reload.requested_starts_at).to be_within(1.second).of(parsed_time)
+        end
+
+        it "only makes one LLM call for the turn" do
+          expect(Llm::BookingSlotExtractor).to receive(:call).once.and_return(extractor_multi_slot)
+          call(body: "quiero un corte el viernes a las 3", step: "awaiting_service")
+        end
+      end
+    end
+  end
+
+  # ─── disambiguation ─────────────────────────────────────────────────────────
+
+  describe "disambiguation" do
+    let(:service_b) { create(:service, account: account, name: "Corte fade", requires_address: false) }
+
+    before do
+      service   # Corte de cabello
+      service_b # Corte fade
+      account.update!(ai_nlu_enabled: true)
+      conversation.update!(step: "awaiting_service")
+    end
+
+    def extractor_with_candidates(primary_service: nil)
+      Success({
+        slots:          { service: primary_service, starts_at: nil, address: nil, confirmation: nil },
+        confidences:    { service: primary_service ? 0.85 : 0.0, datetime: 0.0, address: 0.0, confirmation: 0.0 },
+        top_candidates: [ service, service_b ],
+        input_tokens:   80,
+        output_tokens:  14,
+        model:          Llm::GeminiAdapter::DEFAULT_MODEL
+      })
+    end
+
+    def extractor_no_match
+      Success({
+        slots:          { service: nil, starts_at: nil, address: nil, confirmation: nil },
+        confidences:    { service: 0.0, datetime: 0.0, address: 0.0, confirmation: 0.0 },
+        top_candidates: [],
+        input_tokens:   70,
+        output_tokens:  10,
+        model:          Llm::GeminiAdapter::DEFAULT_MODEL
+      })
+    end
+
+    context "when extractor returns medium-confidence candidates and no primary service" do
+      it "advances to awaiting_disambiguation and sends a targeted question" do
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(extractor_with_candidates)
+
+        result = call(body: "un corte", step: "awaiting_service")
+
+        expect(result).to be_success.and(have_attributes(value!: :awaiting_disambiguation))
+        expect(conversation.reload.step).to eq("awaiting_disambiguation")
+        meta = conversation.reload.metadata["disambiguation"]
+        expect(meta["slot"]).to eq("service")
+        expect(meta["candidates"]).to contain_exactly(service.id, service_b.id)
+      end
+
+      it "sends a disambiguation message listing the candidate services" do
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(extractor_with_candidates)
+
+        call(body: "un corte", step: "awaiting_service")
+
+        body_sent = account.message_logs.outbound.order(:created_at).last.body
+        expect(body_sent).to include(service.name)
+        expect(body_sent).to include(service_b.name)
+      end
+    end
+
+    context "when at awaiting_disambiguation and customer types a digit" do
+      before do
+        conversation.update!(
+          step:     "awaiting_disambiguation",
+          metadata: { "disambiguation" => { "slot" => "service", "candidates" => [ service.id, service_b.id ] } }
+        )
+      end
+
+      it "resolves '1' to the first candidate and advances to awaiting_datetime" do
+        result = call(body: "1", step: "awaiting_disambiguation")
+
+        expect(result).to be_success.and(have_attributes(value!: :awaiting_datetime))
+        expect(conversation.reload.step).to eq("awaiting_datetime")
+        expect(conversation.reload.service).to eq(service)
+        expect(conversation.reload.metadata["disambiguation"]).to be_nil
+      end
+
+      it "resolves '2' to the second candidate and advances to awaiting_datetime" do
+        result = call(body: "2", step: "awaiting_disambiguation")
+
+        expect(result).to be_success.and(have_attributes(value!: :awaiting_datetime))
+        expect(conversation.reload.service).to eq(service_b)
+      end
+    end
+
+    context "when at awaiting_disambiguation and LLM re-extraction resolves to a candidate" do
+      before do
+        conversation.update!(
+          step:     "awaiting_disambiguation",
+          metadata: { "disambiguation" => { "slot" => "service", "candidates" => [ service.id, service_b.id ] } }
+        )
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(
+          Success({
+            slots:          { service: service_b, starts_at: nil, address: nil, confirmation: nil },
+            confidences:    { service: 0.9, datetime: 0.0, address: 0.0, confirmation: 0.0 },
+            top_candidates: [],
+            input_tokens:   80,
+            output_tokens:  12,
+            model:          Llm::GeminiAdapter::DEFAULT_MODEL
+          })
+        )
+      end
+
+      it "resolves to the matched candidate and advances to awaiting_datetime" do
+        result = call(body: "el fade", step: "awaiting_disambiguation")
+
+        expect(result).to be_success.and(have_attributes(value!: :awaiting_datetime))
+        expect(conversation.reload.service).to eq(service_b)
+      end
+    end
+
+    context "when at awaiting_disambiguation and the user is still ambiguous" do
+      before do
+        conversation.update!(
+          step:     "awaiting_disambiguation",
+          metadata: { "disambiguation" => { "slot" => "service", "candidates" => [ service.id, service_b.id ] } }
+        )
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(extractor_no_match)
+      end
+
+      it "falls back to the full service list and resets to awaiting_service" do
+        result = call(body: "no sé", step: "awaiting_disambiguation")
+
+        expect(result).to be_success.and(have_attributes(value!: :awaiting_service))
+        expect(conversation.reload.step).to eq("awaiting_service")
+        expect(conversation.reload.metadata["disambiguation"]).to be_nil
+      end
+    end
+
+    context "Mexican-Spanish affirmative variants in confirm_booking" do
+      before do
+        user  # ensure a staff member exists
+        conversation.update!(
+          step:                "confirming_booking",
+          service:             service,
+          requested_starts_at: 1.day.from_now
+        )
+      end
+
+      %w[simón obvio sale].each do |word|
+        it "confirms booking when body is '#{word}'" do
+          result = call(body: word, step: "confirming_booking")
+
+          expect(result).to be_success
+          expect(result.value!).to be_a(Booking)
+          expect(conversation.reload.step).to eq("completed")
+        end
+      end
+    end
+
+    context "Mexican-Spanish negative variants in confirm_booking" do
+      before do
+        conversation.update!(
+          step:                "confirming_booking",
+          service:             service,
+          requested_starts_at: 1.day.from_now
+        )
+      end
+
+      %w[nones].each do |word|
+        it "cancels booking when body is '#{word}'" do
+          result = call(body: word, step: "confirming_booking")
+
+          expect(result).to be_success.and(have_attributes(value!: :cancelled))
+          expect(conversation.reload.step).to eq("cancelled")
         end
       end
     end
@@ -102,8 +309,8 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
     before { conversation.update!(step: "awaiting_datetime", service: service) }
 
     context "when the customer uses a strict format" do
-      it "advances without calling the LLM" do
-        expect(Llm::NluParser).not_to receive(:parse_datetime)
+      it "advances without calling the extractor" do
+        expect(Llm::BookingSlotExtractor).not_to receive(:call)
         result = call(body: "2026-05-10 15:00", step: "awaiting_datetime")
         expect(result).to be_success
         expect(conversation.reload.step).to eq("confirming_booking")
@@ -111,8 +318,8 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
     end
 
     context "when ai_nlu_enabled is false and format is unrecognized" do
-      it "re-prompts without calling the LLM" do
-        expect(Llm::NluParser).not_to receive(:parse_datetime)
+      it "re-prompts without calling the extractor" do
+        expect(Llm::BookingSlotExtractor).not_to receive(:call)
         result = call(body: "viernes a las 3", step: "awaiting_datetime")
         expect(result).to be_success.and(have_attributes(value!: :awaiting_datetime))
       end
@@ -121,27 +328,53 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
     context "when ai_nlu_enabled is true and input is free-text Spanish" do
       before { account.update!(ai_nlu_enabled: true) }
 
-      let(:parsed_time) { Time.zone.parse("2026-05-01T15:00:00") }
-      let(:nlu_success) do
-        Success({ value: parsed_time, input_tokens: 95, output_tokens: 18,
-                  model: Llm::GeminiAdapter::DEFAULT_MODEL })
+      let(:parsed_time) { Time.zone.parse("2026-05-09T15:00:00") }
+
+      def extractor_datetime_only
+        Success({
+          slots:          { service: nil, starts_at: parsed_time, address: nil, confirmation: nil },
+          confidences:    { service: 0.0, datetime: 0.9, address: 0.0, confirmation: 0.0 },
+          top_candidates: [],
+          input_tokens:   95,
+          output_tokens:  18,
+          model:          Llm::GeminiAdapter::DEFAULT_MODEL
+        })
       end
 
-      it "calls the NLU parser and advances to confirming_booking" do
-        allow(Llm::NluParser).to receive(:parse_datetime).and_return(nlu_success)
+      it "calls the slot extractor and advances to confirming_booking" do
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(extractor_datetime_only)
 
-        result = call(body: "viernes a las 3", step: "awaiting_datetime")
+        result = call(body: "el viernes a las 3", step: "awaiting_datetime")
 
         expect(result).to be_success
         expect(conversation.reload.step).to eq("confirming_booking")
         expect(conversation.reload.requested_starts_at).to be_within(1.second).of(parsed_time)
       end
 
-      context "when the NLU parser returns Failure" do
+      context "when the extractor returns Failure" do
         it "re-prompts without advancing" do
-          allow(Llm::NluParser).to receive(:parse_datetime).and_return(Failure(:low_confidence))
+          allow(Llm::BookingSlotExtractor).to receive(:call).and_return(Failure(:llm_error))
 
           result = call(body: "no sé cuándo", step: "awaiting_datetime")
+
+          expect(result).to be_success.and(have_attributes(value!: :awaiting_datetime))
+          expect(conversation.reload.step).to eq("awaiting_datetime")
+        end
+      end
+
+      context "when the extractor returns success but starts_at is nil (partial expression)" do
+        it "re-prompts — only date provided, no time" do
+          no_time = Success({
+            slots:          { service: nil, starts_at: nil, address: nil, confirmation: nil },
+            confidences:    { service: 0.0, datetime: 0.3, address: 0.0, confirmation: 0.0 },
+            top_candidates: [],
+            input_tokens:   80,
+            output_tokens:  12,
+            model:          Llm::GeminiAdapter::DEFAULT_MODEL
+          })
+          allow(Llm::BookingSlotExtractor).to receive(:call).and_return(no_time)
+
+          result = call(body: "el viernes", step: "awaiting_datetime")
 
           expect(result).to be_success.and(have_attributes(value!: :awaiting_datetime))
           expect(conversation.reload.step).to eq("awaiting_datetime")
@@ -429,8 +662,14 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
           input_tokens: 50, output_tokens: 8,
           model: Llm::GeminiAdapter::DEFAULT_MODEL
         })
+        extractor_result = Success({
+          slots:          { service: service, starts_at: nil, address: nil, confirmation: nil },
+          confidences:    { service: 0.9, datetime: 0.0, address: 0.0, confirmation: 0.0 },
+          top_candidates: [],
+          input_tokens:   80, output_tokens: 15, model: Llm::GeminiAdapter::DEFAULT_MODEL
+        })
         allow(Llm::QuestionClassifier).to receive(:call).and_return(non_question)
-        allow(Llm::NluParser).to receive(:parse_service).and_return(Success({ value: service, input_tokens: 80, output_tokens: 15, model: Llm::GeminiAdapter::DEFAULT_MODEL }))
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(extractor_result)
 
         result = call(body: "quiero reservar un corte", step: "awaiting_service")
 
@@ -444,7 +683,7 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
 
       it "falls through to the normal step handler" do
         allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:llm_error))
-        allow(Llm::NluParser).to receive(:parse_service).and_return(Failure(:low_confidence))
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(Failure(:llm_error))
 
         result = call(body: "algo raro", step: "awaiting_service")
 

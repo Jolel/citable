@@ -5,6 +5,7 @@ class WhatsappConversation < ApplicationRecord
   STEPS = %w[
     awaiting_name
     awaiting_service
+    awaiting_disambiguation
     awaiting_datetime
     awaiting_address
     confirming_booking

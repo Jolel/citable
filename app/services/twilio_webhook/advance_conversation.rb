@@ -33,6 +33,7 @@ module TwilioWebhook
       case conversation.step
       when "awaiting_name"           then collect_name
       when "awaiting_service"        then collect_service
+      when "awaiting_disambiguation" then resolve_disambiguation
       when "awaiting_datetime"       then collect_datetime
       when "awaiting_address"        then collect_address
       when "confirming_booking"      then confirm_booking
@@ -60,20 +61,45 @@ module TwilioWebhook
     end
 
     def collect_service
+      # Deterministic: bare digit input
       idx     = service_index
       service = idx && idx >= 0 ? active_services[idx] : nil
 
+      # Multi-slot LLM extraction
       if service.nil? && account.ai_nlu_enabled?
-        nlu = Llm::NluParser.parse_service(body, active_services)
-        if nlu.success?
-          record_ai_usage(nlu.value!)
-          service = nlu.value![:value]
-        end
+        service = extracted_slots&.dig(:service)
       end
 
       unless service
+        # Disambiguation: medium-confidence candidates available → targeted question.
+        if account.ai_nlu_enabled? && extracted_candidates.any?
+          dis = Disambiguator.call(slot: :service, candidates: extracted_candidates, conversation: conversation)
+          conversation.update!(
+            step:     "awaiting_disambiguation",
+            metadata: conversation.metadata.merge("disambiguation" => dis[:metadata])
+          )
+          send_message(dis[:message], customer: conversation.customer)
+          return Success(:awaiting_disambiguation)
+        end
+
         send_service_prompt(prefix: "No encontré esa opción. Por favor elige un servicio:")
         return Success(:awaiting_service)
+      end
+
+      # Skip-ahead: if the same message also provided a datetime, jump directly
+      # to the confirmation step instead of asking for the date again.
+      starts_at = account.ai_nlu_enabled? ? extracted_slots&.dig(:starts_at) : nil
+
+      if starts_at
+        next_step = service.requires_address? ? "awaiting_address" : "confirming_booking"
+        conversation.update!(service: service, requested_starts_at: starts_at, step: next_step)
+        if service.requires_address?
+          send_message("Este servicio requiere dirección. ¿Cuál es la dirección de la cita?", customer: conversation.customer)
+          return Success(:awaiting_address)
+        else
+          send_confirmation_prompt
+          return Success(:confirming_booking)
+        end
       end
 
       conversation.update!(service: service, step: "awaiting_datetime")
@@ -81,15 +107,68 @@ module TwilioWebhook
       Success(:awaiting_datetime)
     end
 
+    def resolve_disambiguation
+      dis = conversation.metadata["disambiguation"]
+      return fall_back_to_service_list unless dis
+
+      candidate_ids = dis["candidates"] || []
+      candidates    = active_services.select { |s| candidate_ids.include?(s.id) }
+
+      if dis["slot"] == "service"
+        resolve_service_disambiguation(candidates)
+      else
+        fall_back_to_service_list
+      end
+    end
+
+    def resolve_service_disambiguation(candidates)
+      # (a) Digit: "1" → first candidate, "2" → second, etc.
+      if (idx = service_index) && idx >= 0 && idx < candidates.size
+        return advance_with_service(candidates[idx])
+      end
+
+      # (b) LLM re-extraction — user paraphrased with a new message
+      if account.ai_nlu_enabled?
+        if (svc = extracted_slots&.dig(:service)) && candidates.include?(svc)
+          return advance_with_service(svc)
+        end
+      end
+
+      # (c) Affirmative when only one candidate remains
+      if candidates.size == 1 && IntentMatchers.affirmative?(body)
+        return advance_with_service(candidates.first)
+      end
+
+      # Still ambiguous — clear and fall back to the full service list.
+      fall_back_to_service_list
+    end
+
+    def advance_with_service(service)
+      conversation.update!(
+        service:  service,
+        step:     "awaiting_datetime",
+        metadata: conversation.metadata.except("disambiguation")
+      )
+      send_message(datetime_prompt, customer: conversation.customer)
+      Success(:awaiting_datetime)
+    end
+
+    def fall_back_to_service_list
+      conversation.update!(
+        step:     "awaiting_service",
+        metadata: conversation.metadata.except("disambiguation")
+      )
+      send_service_prompt(prefix: "No entendí. Por favor elige un servicio:")
+      Success(:awaiting_service)
+    end
+
     def collect_datetime
+      # Deterministic: strict date/time format
       starts_at = parse_datetime(body)
 
+      # Multi-slot LLM extraction
       if starts_at.nil? && account.ai_nlu_enabled?
-        nlu = Llm::NluParser.parse_datetime(body)
-        if nlu.success?
-          record_ai_usage(nlu.value!)
-          starts_at = nlu.value![:value]
-        end
+        starts_at = extracted_slots&.dig(:starts_at)
       end
 
       unless starts_at
@@ -162,7 +241,7 @@ module TwilioWebhook
       nlu = Llm::NluParser.parse_confirmation(body)
       return unless nlu.success?
 
-      record_ai_usage(nlu.value!)
+      TwilioWebhook::AiUsageRecorder.record(account: account, hash: nlu.value!)
       nlu.value![:value]
     end
 
@@ -213,15 +292,26 @@ module TwilioWebhook
       nil
     end
 
-    # Stamps AI token usage onto the most recent inbound log for the account.
-    # nlu_hash is a plain Hash with keys :input_tokens, :output_tokens, :model.
-    def record_ai_usage(nlu_hash)
-      log = account.message_logs.inbound.order(:created_at).last
-      log&.update_columns(
-        ai_input_tokens:  nlu_hash[:input_tokens],
-        ai_output_tokens: nlu_hash[:output_tokens],
-        ai_model:         nlu_hash[:model]
-      )
+    # Runs BookingSlotExtractor once per #call invocation (memoized) and records
+    # AI token usage on the inbound MessageLog.  Returns the full result hash or nil.
+    def extraction_result
+      return @_extraction_result if instance_variable_defined?(:@_extraction_result)
+
+      @_extraction_result = begin
+        result = Llm::BookingSlotExtractor.call(body: body, services: active_services)
+        if result.success?
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: result.value!)
+          result.value!
+        end
+      end
+    end
+
+    def extracted_slots
+      extraction_result&.dig(:slots)
+    end
+
+    def extracted_candidates
+      extraction_result&.fetch(:top_candidates, nil) || []
     end
 
     # ── prompt text helpers ───────────────────────────────────────────────────
@@ -351,7 +441,7 @@ module TwilioWebhook
       data = result.value!
       return nil unless answerable.include?(data[:intent].to_s)
 
-      record_ai_usage(data)
+      TwilioWebhook::AiUsageRecorder.record(account: account, hash: data)
       answer = AnswerQuestion.call(
         intent: data[:intent], service: data[:service], account: account,
         cta: current_step_prompt_text, customer: conversation.customer
@@ -370,6 +460,14 @@ module TwilioWebhook
       when "awaiting_service"
         lines = active_services.each_with_index.map { |svc, i| "#{i + 1}. #{svc.name} (#{svc.duration_label})" }
         ([ "Elige un servicio:" ] + lines).join("\n")
+      when "awaiting_disambiguation"
+        dis = conversation.metadata["disambiguation"]
+        return nil unless dis
+        if dis["slot"] == "service"
+          candidate_ids = dis["candidates"] || []
+          candidates    = active_services.select { |s| candidate_ids.include?(s.id) }
+          Disambiguator.call(slot: :service, candidates: candidates, conversation: conversation)[:message]
+        end
       when "awaiting_datetime"
         datetime_prompt
       when "awaiting_address"

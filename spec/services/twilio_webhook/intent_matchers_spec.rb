@@ -148,14 +148,38 @@ RSpec.describe TwilioWebhook::IntentMatchers do
     end
   end
 
-  describe ".affirmative? / .negative?" do
-    it "matches sí/no variants" do
-      %w[sí si Si SI Sí confirmo Confirmar dale va listo].each do |body|
-        expect(described_class.affirmative?(body)).to be(true), "expected #{body.inspect} to be affirmative"
+  describe ".affirmative?" do
+    [
+      "sí", "si", "Si", "SI", "Sí",
+      "confirmo", "Confirmar", "dale", "va", "listo",
+      "simón", "simon", "obvio", "sale", "dale pues",
+      "va que va"
+    ].each do |body|
+      it "matches #{body.inspect}" do
+        expect(described_class.affirmative?(body)).to be true
       end
+    end
 
-      %w[no nop nel].each do |body|
-        expect(described_class.negative?(body)).to be(true), "expected #{body.inspect} to be negative"
+    [ "no", "no gracias", "tal vez", "quizás" ].each do |body|
+      it "does NOT match #{body.inspect}" do
+        expect(described_class.affirmative?(body)).to be false
+      end
+    end
+  end
+
+  describe ".negative?" do
+    [
+      "no", "nop", "nel", "nel pastel", "nones",
+      "mejor no", "no puedo", "no quiero"
+    ].each do |body|
+      it "matches #{body.inspect}" do
+        expect(described_class.negative?(body)).to be true
+      end
+    end
+
+    [ "sí", "dale", "obvio" ].each do |body|
+      it "does NOT match #{body.inspect}" do
+        expect(described_class.negative?(body)).to be false
       end
     end
   end

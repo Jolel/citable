@@ -25,9 +25,9 @@ module TwilioWebhook
 
     CANCEL_WORDS = /\b(cancelar(?:me)?|cancela|cancelo|cancelaci[oó]n|anular|ya\s+no\s+(?:puedo|voy)|no\s+podr[eé](?:\s+ir)?|no\s+voy\s+a\s+poder|deseo\s+cancelar|quiero\s+cancelar|quisiera\s+cancelar)\b/i
 
-    CONFIRM_YES = /\A\s*(s[ií](?:\s+(?:confirmo|me\s+queda(?:\s+(?:bien|perfecto))?))?|sip|simon|claro|dale|va|ok(?:ay)?|perfecto|de\s+acuerdo|confirmo|confirmar|confirmado|adelante|por\s+supuesto|listo|me\s+queda(?:\s+(?:bien|perfecto))?|est[aá]\s+bien|me\s+parece\s+bien)[\s.!¡]*\z/i
+    CONFIRM_YES = /\A\s*(s[ií](?:\s+(?:confirmo|me\s+queda(?:\s+(?:bien|perfecto))?))?|sip|sim[oó]n|claro|dale(?:\s+pues)?|va(?:\s+que\s+va)?|ok(?:ay)?|perfecto|de\s+acuerdo|confirmo|confirmar|confirmado|adelante|por\s+supuesto|listo|obvio|sale|me\s+queda(?:\s+(?:bien|perfecto))?|est[aá]\s+bien|me\s+parece\s+bien)[\s.!¡]*\z/i
 
-    CONFIRM_NO = /\A\s*(no(?:\s+gracias)?|nop|nel|cancela|mejor\s+no|no\s+puedo|no\s+quiero)[\s.!¡]*\z/i
+    CONFIRM_NO = /\A\s*(no(?:\s+gracias)?|nop|nel(?:\s+pastel)?|nones|cancela|mejor\s+no|no\s+puedo|no\s+quiero)[\s.!¡]*\z/i
 
     def asking_about_appointment_cost?(body)
       PRICE_WORDS.match?(body) && OWN_APPOINTMENT_WORDS.match?(body)
