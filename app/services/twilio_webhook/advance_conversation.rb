@@ -26,6 +26,9 @@ module TwilioWebhook
       end
 
       if account.ai_nlu_enabled? && !confirmation_digit?(body)
+        correction = maybe_handle_correction
+        return correction if correction
+
         question_result = maybe_answer_question
         return question_result if question_result
       end
@@ -292,13 +295,21 @@ module TwilioWebhook
       nil
     end
 
+    def turn_history
+      @turn_history ||= TurnHistory.for(
+        account:      account,
+        customer:     conversation.customer,
+        conversation: conversation
+      )
+    end
+
     # Runs BookingSlotExtractor once per #call invocation (memoized) and records
     # AI token usage on the inbound MessageLog.  Returns the full result hash or nil.
     def extraction_result
       return @_extraction_result if instance_variable_defined?(:@_extraction_result)
 
       @_extraction_result = begin
-        result = Llm::BookingSlotExtractor.call(body: body, services: active_services)
+        result = Llm::BookingSlotExtractor.call(body: body, services: active_services, history: turn_history)
         if result.success?
           TwilioWebhook::AiUsageRecorder.record(account: account, hash: result.value!)
           result.value!
@@ -435,19 +446,75 @@ module TwilioWebhook
       answerable = Llm::QuestionClassifier::QUESTION_INTENTS +
                    Llm::QuestionClassifier::BOOKING_CONTEXT_INTENTS
 
-      result = Llm::QuestionClassifier.call(body, services: active_services, account: account)
-      return nil unless result.success?
+      result = Llm::QuestionClassifier.call(body, services: active_services, account: account, history: turn_history)
 
-      data = result.value!
-      return nil unless answerable.include?(data[:intent].to_s)
+      if result.success?
+        data = result.value!
 
-      TwilioWebhook::AiUsageRecorder.record(account: account, hash: data)
+        if answerable.include?(data[:intent].to_s)
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: data)
+          answer = AnswerQuestion.call(
+            intent: data[:intent], service: data[:service], account: account,
+            cta: current_step_prompt_text, customer: conversation.customer
+          )
+          send_message(answer, customer: conversation.customer)
+          return Success(:answered_question)
+        end
+
+        if data[:intent] == :out_of_scope
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: data)
+          return send_out_of_scope_answer
+        end
+      end
+
+      # QuestionClassifier didn't find an answerable intent.
+      # Try ScopeClassifier as fallback for out-of-scope FAQs.
+      # Skip for very short replies ("ok", "sí") that are clearly not questions.
+      if body.split.length > 2
+        scope = Llm::ScopeClassifier.call(body: body, account: account, history: turn_history)
+        if scope.success?
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: scope.value!)
+          return send_out_of_scope_answer
+        end
+      end
+
+      nil
+    end
+
+    def send_out_of_scope_answer
       answer = AnswerQuestion.call(
-        intent: data[:intent], service: data[:service], account: account,
+        intent: :out_of_scope, service: nil, account: account,
         cta: current_step_prompt_text, customer: conversation.customer
       )
       send_message(answer, customer: conversation.customer)
       Success(:answered_question)
+    end
+
+    # Checks for a mid-flow correction ("espera, mejor el viernes a las 5") and
+    # applies updated slots.  Returns Success(:corrected) if a correction was applied,
+    # nil otherwise so the caller can continue to the next handler.
+    def maybe_handle_correction
+      return nil unless IntentMatchers.correction_intent?(body)
+      return nil unless conversation.service_id.present? || conversation.requested_starts_at.present?
+
+      result = CorrectionDetector.call(body: body, conversation: conversation, account: account, history: turn_history)
+      return nil unless result.success?
+
+      TwilioWebhook::AiUsageRecorder.record(account: account, hash: result.value!)
+
+      # conversation.step was updated by CorrectionDetector; re-prompt that step.
+      case conversation.step
+      when "confirming_booking"
+        send_confirmation_prompt(prefix: "¡Listo, actualicé tu cita!")
+      when "awaiting_datetime"
+        send_message(datetime_prompt, customer: conversation.customer)
+      when "awaiting_address"
+        send_message("Este servicio requiere dirección. ¿Cuál es la dirección de la cita?", customer: conversation.customer)
+      when "awaiting_service"
+        send_service_prompt
+      end
+
+      Success(:corrected)
     end
 
     # Returns the re-prompt text for the current step.

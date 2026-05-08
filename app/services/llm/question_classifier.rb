@@ -13,7 +13,7 @@ module Llm
     BOOKING_CONTEXT_INTENTS = %w[appointment_date list_appointments].freeze
     # Intents the post-booking handler reacts to (questions + flow control).
     POST_BOOKING_INTENTS = (QUESTION_INTENTS + BOOKING_CONTEXT_INTENTS + %w[cancel booking]).freeze
-    ALL_INTENTS = (QUESTION_INTENTS + BOOKING_CONTEXT_INTENTS + %w[cancel booking greeting other]).freeze
+    ALL_INTENTS = (QUESTION_INTENTS + BOOKING_CONTEXT_INTENTS + %w[cancel booking greeting other out_of_scope]).freeze
 
     SCHEMA = {
       type: "object",
@@ -32,8 +32,8 @@ module Llm
     # (wrong booking is created). Keep this lower than NluParser::MIN_CONFIDENCE.
     MIN_CONFIDENCE = 0.65
 
-    def self.call(body, services:, account:, llm: Citable::Container["infrastructure.llm"])
-      new(account: account, llm: llm).call(body, services)
+    def self.call(body, services:, account:, history: [], llm: Citable::Container["infrastructure.llm"])
+      new(account: account, llm: llm).call(body, services, history)
     end
 
     def initialize(account:, llm: Citable::Container["infrastructure.llm"])
@@ -44,7 +44,7 @@ module Llm
     # Returns Success({ intent:, service:, input_tokens:, output_tokens:, model: })
     # or Failure(:not_a_question | :llm_error).
     # Failure(:not_a_question) means the caller should fall through to the booking flow.
-    def call(body, services)
+    def call(body, services, history = [])
       service_list = services.each_with_index.map { |svc, i| "#{i + 1}. #{svc.name}" }.join(", ")
       service_list = "(sin servicios)" if service_list.empty?
 
@@ -63,10 +63,11 @@ module Llm
         - "cancel": el cliente quiere cancelar su cita ("cancelar mi cita", "ya no puedo", "no voy a poder ir", "anular")
         - "booking": el cliente quiere reservar una cita (menciona servicio + fecha/hora, o dice "quiero agendar")
         - "greeting": saludo simple sin contenido adicional ("hola", "buenas", "qué tal")
+        - "out_of_scope": pregunta legítima que el bot no puede responder ("¿aceptan tarjeta?", "¿hay estacionamiento?", "¿tienen wifi?", "¿aceptan mascotas?", preguntas sobre el equipo o negocio)
         - "other": mensaje no relacionado o ambiguo
 
         Para "price" y "duration", devuelve service_index (1-based) si el cliente menciona un servicio específico, o null si pregunta en general o sobre su propia cita.
-        Devuelve confidence entre 0 y 1.
+        Devuelve confidence entre 0 y 1.#{history_section(history)}
       PROMPT
       user = "Servicios disponibles: #{service_list}.\nMensaje del cliente: \"#{body}\"."
 
@@ -93,5 +94,20 @@ module Llm
     private
 
     attr_reader :account
+
+    def history_section(history)
+      return "" if history.blank?
+
+      lines = history.filter_map do |entry|
+        case entry[:role]
+        when "user"      then "Cliente: #{entry[:body]}"
+        when "assistant" then "Asistente: #{entry[:body]}"
+        when "context"   then entry[:body]
+        end
+      end
+      return "" if lines.empty?
+
+      "\n\nContexto reciente:\n#{lines.join("\n")}"
+    end
   end
 end

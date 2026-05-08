@@ -73,14 +73,15 @@ module Llm
       required: %w[service_index starts_at address confirmation confidences service_alternates]
     }.freeze
 
-    # @param body      [String]       raw customer WhatsApp message
-    # @param services  [Array<Service>] account's active services (ordered)
-    # @param today     [Date, nil]    override for today (defaults to Time.zone.today)
-    # @param llm       [Llm::Port]    injectable adapter
-    def self.call(body:, services:, today: nil, llm: Citable::Container["infrastructure.llm"])
+    # @param body      [String]              raw customer WhatsApp message
+    # @param services  [Array<Service>]      account's active services (ordered)
+    # @param today     [Date, nil]           override for today (defaults to Time.zone.today)
+    # @param history   [Array<Hash>, nil]    conversation context from TurnHistory.for
+    # @param llm       [Llm::Port]           injectable adapter
+    def self.call(body:, services:, today: nil, history: [], llm: Citable::Container["infrastructure.llm"])
       today ||= Time.zone.today
 
-      system = build_system_prompt(today, services)
+      system = build_system_prompt(today, services, history)
       user   = "Mensaje del cliente: \"#{body}\""
 
       response = llm.call(system: system, user: user, schema: SCHEMA)
@@ -95,7 +96,7 @@ module Llm
 
     # ── private helpers ──────────────────────────────────────────────────────
 
-    def self.build_system_prompt(today, services)
+    def self.build_system_prompt(today, services, history = [])
       service_list = if services.empty?
                        "(sin servicios registrados)"
       else
@@ -127,7 +128,7 @@ module Llm
         - Devuelve null si solo se menciona el día sin hora ("el viernes", "el lunes que viene")
         - Devuelve null si la hora es ambigua en más de 30 minutos ("en la tarde", "en la mañana")
         - "mañana a las 3pm" → #{tomorrow}T15:00:00
-        - NO incluyas "Z" ni offsets como "-06:00"; el sistema interpreta America/Mexico_City.
+        - NO incluyas "Z" ni offsets como "-06:00"; el sistema interpreta America/Mexico_City.#{history_block(history)}
 
         ## Ejemplos (servicios de ejemplo: 1. Corte clásico, 2. Tinte, 3. Manicure)
 
@@ -242,6 +243,22 @@ module Llm
         .filter_map { |a| services[a["index"].to_i - 1] }
     end
     private_class_method :extract_candidates
+
+    def self.history_block(history)
+      return "" if history.blank?
+
+      lines = history.filter_map do |entry|
+        case entry[:role]
+        when "user"      then "Cliente: #{entry[:body]}"
+        when "assistant" then "Asistente: #{entry[:body]}"
+        when "context"   then entry[:body]
+        end
+      end
+      return "" if lines.empty?
+
+      "\n\n## Contexto de la conversación\n#{lines.join("\n")}"
+    end
+    private_class_method :history_block
 
     def self.localized_day_name(date)
       I18n.t("date.day_names", locale: :"es-MX")[date.wday]

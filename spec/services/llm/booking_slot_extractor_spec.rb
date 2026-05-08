@@ -405,6 +405,48 @@ RSpec.describe Llm::BookingSlotExtractor do
     end
   end
 
+  # ── Conversation history injection ──────────────────────────────────────────
+
+  describe "history prompt injection" do
+    let(:history) do
+      [
+        { role: "user",      body: "quiero el mismo de siempre" },
+        { role: "assistant", body: "¿A qué hora lo quieres?" },
+        { role: "context",   body: "Citas previas del cliente: 2026-04-02 Corte de cabello" }
+      ]
+    end
+
+    before do
+      stub_llm(content: {
+        "service_index"     => nil,
+        "starts_at"         => nil,
+        "address"           => nil,
+        "confirmation"      => nil,
+        "confidences"       => empty_confidences,
+        "service_alternates" => []
+      })
+    end
+
+    it "includes a history section in the prompt when history is provided" do
+      described_class.call(body: "a las 3pm", services: services, history: history, llm: llm)
+
+      expect(llm).to have_received(:call) do |args|
+        expect(args[:system]).to include("Contexto de la conversación")
+        expect(args[:system]).to include("Cliente: quiero el mismo de siempre")
+        expect(args[:system]).to include("Asistente: ¿A qué hora lo quieres?")
+        expect(args[:system]).to include("Citas previas del cliente: 2026-04-02 Corte de cabello")
+      end
+    end
+
+    it "does not include a history section when history is empty" do
+      described_class.call(body: "hola", services: services, history: [], llm: llm)
+
+      expect(llm).to have_received(:call) do |args|
+        expect(args[:system]).not_to include("Contexto de la conversación")
+      end
+    end
+  end
+
   # ── Error handling ───────────────────────────────────────────────────────────
 
   describe "error handling" do

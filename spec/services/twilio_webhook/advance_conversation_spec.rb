@@ -15,6 +15,8 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
     allow(ReminderJob).to receive(:set).and_return(double(perform_later: true))
     allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:not_a_question))
     allow(Llm::BookingSlotExtractor).to receive(:call).and_return(Failure(:llm_error))
+    allow(Llm::ScopeClassifier).to receive(:call).and_return(Failure(:not_out_of_scope))
+    allow(TwilioWebhook::CorrectionDetector).to receive(:call).and_return(Failure(:no_correction))
   end
 
   let(:account)  { create(:account, ai_nlu_enabled: false) }
@@ -712,6 +714,189 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
 
         expect(result).to be_success.and(have_attributes(value!: :cancelled))
       end
+    end
+  end
+
+  # ─── mid-flow corrections ────────────────────────────────────────────────────
+
+  describe "mid-flow corrections" do
+    let(:locked_time) { Time.zone.parse("2026-05-09T15:00:00") }
+    let(:new_time)    { Time.zone.parse("2026-05-10T17:00:00") }
+
+    before do
+      service
+      account.update!(ai_nlu_enabled: true)
+      conversation.update!(
+        step:                "confirming_booking",
+        service:             service,
+        requested_starts_at: locked_time
+      )
+    end
+
+    def correction_success(rewound_to:, applied_slots: [ :starts_at ])
+      Success({
+        rewound_to:    rewound_to,
+        applied_slots: applied_slots,
+        input_tokens:  90,
+        output_tokens: 16,
+        model:         "test"
+      })
+    end
+
+    it "returns Success(:corrected) and re-prompts the rewound step" do
+      conversation.update!(requested_starts_at: new_time)
+      allow(TwilioWebhook::CorrectionDetector).to receive(:call)
+        .and_return(correction_success(rewound_to: "confirming_booking"))
+
+      result = call(body: "mejor el sábado a las 5", step: "confirming_booking")
+
+      expect(result).to be_success.and(have_attributes(value!: :corrected))
+    end
+
+    it "sends a confirmation prompt when rewound to confirming_booking" do
+      conversation.update!(requested_starts_at: new_time)
+      allow(TwilioWebhook::CorrectionDetector).to receive(:call)
+        .and_return(correction_success(rewound_to: "confirming_booking"))
+
+      expect(Whatsapp::MessageSender).to receive(:call).once
+
+      call(body: "mejor el sábado a las 5", step: "confirming_booking")
+    end
+
+    it "does not call CorrectionDetector when ai_nlu_enabled is false" do
+      account.update!(ai_nlu_enabled: false)
+      expect(TwilioWebhook::CorrectionDetector).not_to receive(:call)
+
+      call(body: "mejor el sábado a las 5", step: "confirming_booking")
+    end
+
+    it "does not call CorrectionDetector for digit inputs" do
+      expect(TwilioWebhook::CorrectionDetector).not_to receive(:call)
+
+      user
+      call(body: "1", step: "confirming_booking")
+    end
+
+    it "falls through to normal step processing when CorrectionDetector returns Failure" do
+      allow(TwilioWebhook::CorrectionDetector).to receive(:call)
+        .and_return(Failure(:nothing_changed))
+      allow(Llm::NluParser).to receive(:parse_confirmation)
+        .and_return(Failure(:low_confidence))
+
+      result = call(body: "mejor sí confirmado", step: "confirming_booking")
+
+      # Falls through to confirm_booking; body is ambiguous → re-prompts
+      expect(result).to be_success.and(have_attributes(value!: :confirming_booking))
+      expect(conversation.reload.step).to eq("confirming_booking")
+    end
+  end
+
+  # ─── out-of-scope FAQ handling ───────────────────────────────────────────────
+
+  describe "out-of-scope FAQ handling" do
+    before do
+      service
+      account.update!(ai_nlu_enabled: true)
+      conversation.update!(step: "awaiting_service")
+    end
+
+    context "when QuestionClassifier returns :out_of_scope" do
+      before do
+        allow(Llm::QuestionClassifier).to receive(:call).and_return(
+          Success({ intent: :out_of_scope, service: nil, input_tokens: 55, output_tokens: 8, model: "test" })
+        )
+      end
+
+      it "sends a graceful redirect and preserves the step" do
+        result = call(body: "¿aceptan tarjeta de crédito?", step: "awaiting_service")
+
+        expect(result).to be_success.and(have_attributes(value!: :answered_question))
+        expect(conversation.reload.step).to eq("awaiting_service")
+        body_sent = account.message_logs.outbound.order(:created_at).last.body
+        expect(body_sent).to include("no la puedo responder directamente")
+      end
+    end
+
+    context "when QuestionClassifier returns other and ScopeClassifier detects out-of-scope" do
+      before do
+        allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:not_a_question))
+        allow(Llm::ScopeClassifier).to receive(:call).and_return(
+          Success({ intent: :payment_question, input_tokens: 50, output_tokens: 7, model: "test" })
+        )
+      end
+
+      it "sends a graceful redirect" do
+        result = call(body: "¿aceptan tarjeta o solo efectivo?", step: "awaiting_service")
+
+        expect(result).to be_success.and(have_attributes(value!: :answered_question))
+        body_sent = account.message_logs.outbound.order(:created_at).last.body
+        expect(body_sent).to include("no la puedo responder directamente")
+      end
+
+      it "does not advance the conversation step" do
+        call(body: "¿aceptan tarjeta o solo efectivo?", step: "awaiting_service")
+        expect(conversation.reload.step).to eq("awaiting_service")
+      end
+    end
+
+    context "when body is very short (≤ 2 words)" do
+      it "does not call ScopeClassifier" do
+        allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:not_a_question))
+        expect(Llm::ScopeClassifier).not_to receive(:call)
+
+        call(body: "ok", step: "awaiting_service")
+      end
+    end
+
+    context "when ai_nlu_enabled is false" do
+      before { account.update!(ai_nlu_enabled: false) }
+
+      it "does not call ScopeClassifier" do
+        expect(Llm::ScopeClassifier).not_to receive(:call)
+
+        call(body: "¿aceptan tarjeta o solo efectivo?", step: "awaiting_service")
+      end
+    end
+  end
+
+  # ─── conversation history wiring (Phase 6) ──────────────────────────────────
+
+  describe "conversation history wiring" do
+    let(:fake_history) do
+      [
+        { role: "user",      body: "quiero un corte" },
+        { role: "assistant", body: "¿Para cuándo?" }
+      ]
+    end
+
+    before do
+      service
+      account.update!(ai_nlu_enabled: true)
+      allow(TwilioWebhook::TurnHistory).to receive(:for).and_return(fake_history)
+    end
+
+    it "passes turn_history to BookingSlotExtractor" do
+      expect(Llm::BookingSlotExtractor).to receive(:call)
+        .with(hash_including(history: fake_history))
+        .and_return(Failure(:llm_error))
+
+      # "el próximo viernes" fails deterministic parse_datetime, so it reaches the LLM
+      call(body: "el próximo viernes", step: "awaiting_datetime")
+    end
+
+    it "passes turn_history to QuestionClassifier" do
+      allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:not_a_question))
+
+      expect(Llm::QuestionClassifier).to receive(:call)
+        .with(anything, hash_including(history: fake_history))
+
+      call(body: "¿cuánto cuesta el tinte?", step: "awaiting_service")
+    end
+
+    it "calls BookingSlotExtractor only once per turn even when multiple methods use it" do
+      expect(Llm::BookingSlotExtractor).to receive(:call).once.and_return(Failure(:llm_error))
+
+      call(body: "el próximo viernes", step: "awaiting_datetime")
     end
   end
 end
