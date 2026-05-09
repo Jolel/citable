@@ -41,35 +41,17 @@ module Llm
       @llm     = llm
     end
 
-    # Returns Success({ intent:, service:, input_tokens:, output_tokens:, model: })
+    # Returns Success({ intent:, service:, confidence:, input_tokens:, output_tokens:,
+    #                   model:, latency_ms:, prompt_version: })
     # or Failure(:not_a_question | :llm_error).
     # Failure(:not_a_question) means the caller should fall through to the booking flow.
     def call(body, services, history = [])
       service_list = services.each_with_index.map { |svc, i| "#{i + 1}. #{svc.name}" }.join(", ")
       service_list = "(sin servicios)" if service_list.empty?
 
-      system = <<~PROMPT.strip
-        Eres un asistente que clasifica mensajes de clientes en WhatsApp para un negocio mexicano.
-        Determina si el cliente está haciendo una pregunta o quiere reservar.
-
-        Intents posibles:
-        - "services_list": pregunta qué servicios ofrecen ("¿qué servicios tienen?", "qué hacen", "menú", "con qué cuentan")
-        - "price": pregunta el precio de un servicio específico o el costo de su cita ("¿cuánto cuesta el corte?", "precio del tinte", "cuánto tendré que pagar", "qué costo tiene mi cita")
-        - "duration": pregunta cuánto dura un servicio ("¿cuánto tarda?", "cuánto se lleva")
-        - "hours": pregunta los horarios ("¿a qué hora abren?", "horarios", "están abiertos")
-        - "address": pregunta dónde está el negocio ("¿cuál es la dirección?", "dónde están", "ubicación", "cómo llego")
-        - "appointment_date": pregunta cuándo es SU PROPIA cita ("¿cuándo es mi cita?", "fecha de mi cita", "recuérdame mi cita")
-        - "list_appointments": pregunta si tiene citas o cuáles tiene ("¿tengo citas?", "mis citas")
-        - "cancel": el cliente quiere cancelar su cita ("cancelar mi cita", "ya no puedo", "no voy a poder ir", "anular")
-        - "booking": el cliente quiere reservar una cita (menciona servicio + fecha/hora, o dice "quiero agendar")
-        - "greeting": saludo simple sin contenido adicional ("hola", "buenas", "qué tal")
-        - "out_of_scope": pregunta legítima que el bot no puede responder ("¿aceptan tarjeta?", "¿hay estacionamiento?", "¿tienen wifi?", "¿aceptan mascotas?", preguntas sobre el equipo o negocio)
-        - "other": mensaje no relacionado o ambiguo
-
-        Para "price" y "duration", devuelve service_index (1-based) si el cliente menciona un servicio específico, o null si pregunta en general o sobre su propia cita.
-        Devuelve confidence entre 0 y 1.#{history_section(history)}
-      PROMPT
-      user = "Servicios disponibles: #{service_list}.\nMensaje del cliente: \"#{body}\"."
+      tpl    = PromptTemplate.render(name: "question_classifier")
+      system = tpl[:system] + history_section(history)
+      user   = "Servicios disponibles: #{service_list}.\nMensaje del cliente: \"#{body}\"."
 
       response   = @llm.call(system: system, user: user, schema: SCHEMA)
       intent     = response.content["intent"]
@@ -84,8 +66,16 @@ module Llm
 
       service = idx && services[idx.to_i - 1]
 
-      Success({ intent: intent.to_sym, service: service, input_tokens: response.input_tokens,
-                output_tokens: response.output_tokens, model: response.model })
+      Success({
+        intent:         intent.to_sym,
+        service:        service,
+        confidence:     confidence,
+        input_tokens:   response.input_tokens,
+        output_tokens:  response.output_tokens,
+        model:          response.model,
+        latency_ms:     response.latency_ms,
+        prompt_version: tpl[:version]
+      })
     rescue Llm::Port::Error => e
       Rails.logger.warn "[Llm::QuestionClassifier] failed: #{e.message}"
       Failure(:llm_error)

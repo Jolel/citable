@@ -1,0 +1,99 @@
+<% content_for :title, "Métricas NLU — #{current_account.name}" %>
+
+<%# ── Page header ─────────────────────────────────── %>
+<div class="flex items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="font-fraunces text-2xl font-light text-forest">Métricas NLU</h1>
+    <p class="text-sm text-forest/50 mt-0.5">Últimos 30 días · <%= @total_calls %> llamadas al modelo</p>
+  </div>
+</div>
+
+<%# ── Stat cards ──────────────────────────────────── %>
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
+  <%= render "dashboard/nlu_metrics/stat_card",
+        label: "Llamadas totales",
+        value: number_with_delimiter(@total_calls),
+        sub: "últimos 30 días" %>
+  <%= render "dashboard/nlu_metrics/stat_card",
+        label: "Confianza baja",
+        value: "#{@low_conf_rate}%",
+        sub: "< #{Dashboard::NluMetricsController::LOW_CONFIDENCE_THRESHOLD} conf." %>
+  <%= render "dashboard/nlu_metrics/stat_card",
+        label: "Latencia p50",
+        value: @p50_latency ? "#{number_with_delimiter(@p50_latency)} ms" : "—",
+        sub: "mediana" %>
+  <%= render "dashboard/nlu_metrics/stat_card",
+        label: "Latencia p95",
+        value: @p95_latency ? "#{number_with_delimiter(@p95_latency)} ms" : "—",
+        sub: "percentil 95" %>
+</div>
+
+<%# ── Two-column layout ───────────────────────────── %>
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+  <%# Intent distribution %>
+  <div class="rounded-2xl border border-cream-dark bg-white p-6">
+    <h2 class="font-semibold text-forest mb-4">Distribución de intents</h2>
+    <% if @intent_counts.empty? %>
+      <p class="text-sm text-forest/40">Sin datos aún.</p>
+    <% else %>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-cream-dark text-left text-xs font-semibold uppercase tracking-wide text-forest/40">
+            <th class="pb-2">Intent</th>
+            <th class="pb-2 text-right">Llamadas</th>
+            <th class="pb-2 text-right">%</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-cream-dark">
+          <% @intent_counts.each do |intent, count| %>
+            <tr>
+              <td class="py-2 font-mono text-xs text-forest"><%= intent %></td>
+              <td class="py-2 text-right text-forest/70"><%= number_with_delimiter(count) %></td>
+              <td class="py-2 text-right text-forest/50">
+                <%= @total_calls > 0 ? "#{(count.to_f / @total_calls * 100).round(1)}%" : "—" %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+
+  <%# Token cost & prompt versions %>
+  <div class="space-y-6">
+    <div class="rounded-2xl border border-cream-dark bg-white p-6">
+      <h2 class="font-semibold text-forest mb-4">Tokens (últimos 30 días)</h2>
+      <dl class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <dt class="text-forest/50">Tokens de entrada</dt>
+          <dd class="font-semibold text-forest"><%= number_with_delimiter(@total_input_tokens) %></dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-forest/50">Tokens de salida</dt>
+          <dd class="font-semibold text-forest"><%= number_with_delimiter(@total_output_tokens) %></dd>
+        </div>
+        <div class="flex justify-between border-t border-cream-dark pt-2">
+          <dt class="text-forest/50">Total</dt>
+          <dd class="font-semibold text-forest"><%= number_with_delimiter(@total_input_tokens.to_i + @total_output_tokens.to_i) %></dd>
+        </div>
+      </dl>
+    </div>
+
+    <% if @prompt_versions.any? %>
+      <div class="rounded-2xl border border-cream-dark bg-white p-6">
+        <h2 class="font-semibold text-forest mb-4">Versiones de prompt</h2>
+        <table class="w-full text-sm">
+          <tbody class="divide-y divide-cream-dark">
+            <% @prompt_versions.each do |version, count| %>
+              <tr>
+                <td class="py-2 font-mono text-xs text-forest"><%= version %></td>
+                <td class="py-2 text-right text-forest/70"><%= number_with_delimiter(count) %> llamadas</td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </div>
+</div>

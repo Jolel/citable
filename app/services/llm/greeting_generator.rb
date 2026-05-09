@@ -34,8 +34,9 @@ module Llm
     end
 
     def call(account:, customer: nil)
+      tpl      = PromptTemplate.render(name: "greeting_generator", vars: { account_name: account.name })
       response = @llm.call(
-        system: system_prompt(account),
+        system: tpl[:system],
         user:   user_prompt(customer: customer, account: account),
         schema: SCHEMA
       )
@@ -43,23 +44,20 @@ module Llm
       message = response.content["message"]
       return Failure(:blank_message) if message.blank?
 
-      Success({ message: message, input_tokens: response.input_tokens,
-                output_tokens: response.output_tokens, model: response.model })
+      Success({
+        message:        message,
+        input_tokens:   response.input_tokens,
+        output_tokens:  response.output_tokens,
+        model:          response.model,
+        latency_ms:     response.latency_ms,
+        prompt_version: tpl[:version]
+      })
     rescue Llm::Port::Error => e
       Rails.logger.warn "[Llm::GreetingGenerator] #{e.message}"
       Failure(:llm_error)
     end
 
     private
-
-    def system_prompt(account)
-      <<~PROMPT.strip
-        Eres la recepcionista virtual de "#{account.name}" en WhatsApp.
-        Respondes en español mexicano con trato amable y cercano (tuteo).
-        Escribe SOLO el saludo inicial — máx. 2 oraciones. Sin listas, sin opciones.
-        Usa un emoji como mucho.
-      PROMPT
-    end
 
     def user_prompt(customer:, account:)
       if customer

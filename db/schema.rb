@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_01_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_09_074025) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -71,9 +71,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_01_000000) do
 
   create_table "message_logs", force: :cascade do |t|
     t.bigint "account_id", null: false
+    t.decimal "ai_confidence", precision: 5, scale: 4
     t.integer "ai_input_tokens"
+    t.string "ai_intent"
+    t.integer "ai_latency_ms"
     t.string "ai_model"
     t.integer "ai_output_tokens"
+    t.string "ai_prompt_version"
     t.text "body", null: false
     t.bigint "booking_id"
     t.string "channel", null: false

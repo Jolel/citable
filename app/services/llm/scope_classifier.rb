@@ -27,22 +27,9 @@ module Llm
     }.freeze
 
     def self.call(body:, account:, history: [], llm: Citable::Container["infrastructure.llm"])
-      system = <<~PROMPT.strip
-        Eres un clasificador de mensajes para negocios de servicios mexicanos.
-        Determina si el mensaje es una pregunta fuera del alcance del asistente virtual.
-
-        Categorías:
-        - "payment_question": métodos de pago ("¿aceptan tarjeta?", "¿cobran con transferencia?", "¿hay descuento?")
-        - "parking": estacionamiento o acceso ("¿hay estacionamiento?", "¿dónde me estaciono?")
-        - "wifi": conectividad ("¿tienen wifi?", "¿cuál es la contraseña del wifi?")
-        - "amenity": comodidades del local ("¿tienen área de espera?", "¿aceptan mascotas?", "¿hay acceso para sillas de ruedas?")
-        - "staff_question": sobre el personal o negocio ("¿con quién voy?", "¿cuántos empleados tienen?", "¿quién es el dueño?")
-        - "other_out_of_scope": otra pregunta legítima que el asistente no puede responder
-        - "other": no es una pregunta fuera de alcance (es parte del flujo de reserva normal)
-
-        Devuelve "other" si el mensaje es un saludo, confirmación, solicitud de cita, o pregunta sobre servicios, precios, horarios o dirección — esas las maneja el asistente directamente.#{history_section(history)}
-      PROMPT
-      user = "Mensaje del cliente: \"#{body}\""
+      tpl    = PromptTemplate.render(name: "scope_classifier")
+      system = tpl[:system] + history_section(history)
+      user   = "Mensaje del cliente: \"#{body}\""
 
       response   = llm.call(system: system, user: user, schema: SCHEMA)
       intent     = response.content["intent"]
@@ -52,10 +39,12 @@ module Llm
       return Failure(:not_out_of_scope) unless OUT_OF_SCOPE_TYPES.include?(intent)
 
       Success({
-        intent:        intent.to_sym,
-        input_tokens:  response.input_tokens,
-        output_tokens: response.output_tokens,
-        model:         response.model
+        intent:         intent.to_sym,
+        input_tokens:   response.input_tokens,
+        output_tokens:  response.output_tokens,
+        model:          response.model,
+        latency_ms:     response.latency_ms,
+        prompt_version: tpl[:version]
       })
     rescue Llm::Port::Error => e
       Rails.logger.warn "[Llm::ScopeClassifier] failed: #{e.message}"

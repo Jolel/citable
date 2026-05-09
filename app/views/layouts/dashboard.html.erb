@@ -47,6 +47,9 @@
           <%= dashboard_nav_link("Clientes", dashboard_customers_path, "customers") %>
           <%= dashboard_nav_link("Servicios", dashboard_services_path, "services") %>
           <%= dashboard_nav_link("Personal", dashboard_staff_index_path, "staff") %>
+          <% if current_account.ai_nlu_enabled? %>
+            <%= dashboard_nav_link("Métricas NLU", dashboard_nlu_metrics_path, "nlu_metrics") %>
+          <% end %>
         </nav>
 
         <%# Bottom actions ───────────────────────────── %>

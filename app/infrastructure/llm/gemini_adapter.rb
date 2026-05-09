@@ -17,8 +17,10 @@ module Llm
     end
 
     def call(system:, user:, schema:)
+      t0  = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       raw = post(system: system, user: user, schema: schema)
-      parse(raw)
+      ms  = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round
+      parse(raw, latency_ms: ms)
     end
 
     private
@@ -72,7 +74,7 @@ module Llm
       }
     end
 
-    def parse(body)
+    def parse(body, latency_ms: 0)
       data = JSON.parse(body)
       text = data.dig("candidates", 0, "content", "parts", 0, "text")
       raise Error, "Empty response from Gemini" if text.blank?
@@ -84,7 +86,8 @@ module Llm
         content:       content,
         input_tokens:  usage["promptTokenCount"].to_i,
         output_tokens: usage["candidatesTokenCount"].to_i,
-        model:         model
+        model:         model,
+        latency_ms:    latency_ms
       )
     rescue JSON::ParserError => e
       raise Error, "Gemini returned invalid JSON: #{e.message}"
