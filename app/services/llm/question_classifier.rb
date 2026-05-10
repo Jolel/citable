@@ -60,8 +60,6 @@ module Llm
 
       return Failure(:not_a_question) if intent.nil? || confidence < MIN_CONFIDENCE
       return Failure(:not_a_question) unless ALL_INTENTS.include?(intent) && intent != "other"
-      # Greeting is recognized for callers that want it (handled by IntentMatchers
-      # too) but treated as fall-through here so the booking flow keeps moving.
       return Failure(:not_a_question) if intent == "greeting"
 
       service = idx && services[idx.to_i - 1]

@@ -168,7 +168,32 @@ RSpec.describe TwilioWebhook::HandleReply do
     end
 
     context "guided booking flow" do
+      include Dry::Monads[:result]
+
       let!(:owner) { create(:user, :owner, account: account, name: "Owner") }
+
+      def extractor_with_time(time)
+        Success({
+          slots:          { service: nil, starts_at: time, address: nil, confirmation: nil },
+          confidences:    { service: 0.0, datetime: 0.92, address: 0.0, confirmation: 0.0 },
+          top_candidates: [],
+          input_tokens:   80, output_tokens: 14, model: "test"
+        })
+      end
+
+      before do
+        account.update!(ai_nlu_enabled: true)
+        allow(Llm::GreetingGenerator).to receive(:call).and_return(Failure(:llm_error))
+        allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:not_a_question))
+        allow(Llm::ScopeClassifier).to receive(:call).and_return(Failure(:not_out_of_scope))
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(Failure(:llm_error))
+        allow(Llm::BookingSlotExtractor).to receive(:call)
+          .with(hash_including(body: "2026-04-26 15:00"))
+          .and_return(extractor_with_time(Time.zone.local(2026, 4, 26, 15, 0)))
+        allow(Llm::BookingSlotExtractor).to receive(:call)
+          .with(hash_including(body: "26/04/2026 15:00"))
+          .and_return(extractor_with_time(Time.zone.local(2026, 4, 26, 15, 0)))
+      end
 
       it "creates a customer and booking from whatsapp prompts (no profile name)" do
         expect {
@@ -234,7 +259,10 @@ RSpec.describe TwilioWebhook::HandleReply do
         call(from: "whatsapp:+5215599999999", body: "1")
         result = call(from: "whatsapp:+5215599999999", body: "26/04/2026 15:00")
 
-        expect(result).to be_success.and(have_attributes(value!: :awaiting_address))
+        # CorrectionDetector applies the datetime slot and routes to awaiting_address.
+        expect(result).to be_success
+        conv = account.whatsapp_conversations.order(:created_at).last
+        expect(conv.step).to eq("awaiting_address")
         expect(MessageLog.last.body).to include("dirección")
       end
     end

@@ -12,19 +12,6 @@ module TwilioWebhook
       @account = account
       @from_phone = from_phone
 
-      # Deterministic checks first (always on, regardless of ai_nlu_enabled).
-      # These handle the high-frequency "Hola" loop and common Q&A without an
-      # LLM round-trip and without the non-determinism of confidence thresholds.
-      if !confirmation_digit?(body)
-        deterministic = maybe_answer_deterministically
-        return deterministic if deterministic
-
-        if IntentMatchers.greeting_only?(body)
-          handle_mid_flow_greeting
-          return Success(:greeted)
-        end
-      end
-
       if account.ai_nlu_enabled? && !confirmation_digit?(body)
         correction = maybe_handle_correction
         return correction if correction
@@ -137,9 +124,13 @@ module TwilioWebhook
         end
       end
 
-      # (c) Affirmative when only one candidate remains
-      if candidates.size == 1 && IntentMatchers.affirmative?(body)
-        return advance_with_service(candidates.first)
+      # (c) LLM-confirmed affirmative when only one candidate remains
+      if candidates.size == 1
+        confirm = Llm::NluParser.parse_confirmation(body)
+        if confirm.success? && confirm.value![:value] == :confirmed
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: confirm.value!)
+          return advance_with_service(candidates.first)
+        end
       end
 
       # Still ambiguous — clear and fall back to the full service list.
@@ -166,13 +157,7 @@ module TwilioWebhook
     end
 
     def collect_datetime
-      # Deterministic: strict date/time format
-      starts_at = parse_datetime(body)
-
-      # Multi-slot LLM extraction
-      if starts_at.nil? && account.ai_nlu_enabled?
-        starts_at = extracted_slots&.dig(:starts_at)
-      end
+      starts_at = account.ai_nlu_enabled? ? extracted_slots&.dig(:starts_at) : nil
 
       unless starts_at
         send_message(datetime_reprompt, customer: conversation.customer)
@@ -233,8 +218,8 @@ module TwilioWebhook
     end
 
     def rigid_decision
-      return :confirmed if body == "1" || IntentMatchers.affirmative?(body)
-      return :cancelled if body == "2" || IntentMatchers.negative?(body)
+      return :confirmed if body == "1"
+      return :cancelled if body == "2"
       nil
     end
 
@@ -357,76 +342,6 @@ module TwilioWebhook
       end
     end
 
-    def parse_datetime(value)
-      # Normalize: downcase and strip "a las" / "a la" connectors
-      normalized = value.to_s.strip.downcase
-                        .gsub(/\ba\s+las?\b/, "")
-                        .gsub(/\s+/, " ")
-                        .strip
-
-      if (m = normalized.match(/\A(?:mañana|manana)\s+(.+)\z/))
-        if (parsed = parse_loose_time(m[1].strip))
-          hour, minute = parsed
-          return (Time.zone.today + 1.day).in_time_zone.change(hour: hour, min: minute)
-        end
-      end
-
-      parse_with_format(value, "%Y-%m-%d %H:%M") || parse_with_format(value, "%d/%m/%Y %H:%M")
-    end
-
-    # Parses time strings like "5pm", "5:30pm", "17:00", "5:00", "17".
-    # Returns [hour, minute] in 24-hour format, or nil if unrecognized.
-    def parse_loose_time(str)
-      m = str.match(/\A(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\z/)
-      return unless m
-
-      hour   = m[1].to_i
-      minute = (m[2] || "0").to_i
-      suffix = m[3]
-      hour += 12 if suffix == "pm" && hour < 12
-      hour = 0   if suffix == "am" && hour == 12
-      [ hour, minute ]
-    end
-
-    def parse_with_format(value, format)
-      Time.zone.strptime(value, format)
-    rescue ArgumentError
-      nil
-    end
-
-    # Deterministic regex layer — runs before LLM, always active.
-    # Returns Success(:answered_question) if a FAQ pattern matched, nil otherwise.
-    def maybe_answer_deterministically
-      customer = conversation.customer
-
-      intent =
-        if IntentMatchers.asking_about_appointment_cost?(body) then :price
-        elsif IntentMatchers.asking_about_services?(body)       then :services_list
-        elsif IntentMatchers.asking_about_hours?(body)          then :hours
-        elsif IntentMatchers.asking_about_address?(body)        then :address
-        elsif IntentMatchers.asking_about_appointment_date?(body) then :appointment_date
-        elsif IntentMatchers.asking_to_list_appointments?(body)   then :list_appointments
-        end
-
-      return nil unless intent
-
-      answer = AnswerQuestion.call(
-        intent: intent, service: nil, account: account,
-        cta: current_step_prompt_text, customer: customer
-      )
-      send_message(answer, customer: customer)
-      Success(:answered_question)
-    end
-
-    # Sends the current-step re-prompt with a brief greeting prefix so a bare
-    # "Hola" in mid-flow gets an acknowledgement instead of silence.
-    def handle_mid_flow_greeting
-      prompt = current_step_prompt_text
-      return unless prompt
-
-      send_message(prompt, customer: conversation.customer)
-    end
-
     def confirmation_digit?(body)
       %w[1 2].include?(body.to_s.strip)
     end
@@ -439,10 +354,6 @@ module TwilioWebhook
     # deterministic layer didn't match.
     # Returns Success(:answered_question) or nil.
     def maybe_answer_question
-      # Skip LLM classifier for obvious affirmative/negative responses — those
-      # belong to the confirmation flow, not question answering.
-      return nil if IntentMatchers.affirmative?(body) || IntentMatchers.negative?(body)
-
       answerable = Llm::QuestionClassifier::QUESTION_INTENTS +
                    Llm::QuestionClassifier::BOOKING_CONTEXT_INTENTS
 
@@ -494,7 +405,6 @@ module TwilioWebhook
     # applies updated slots.  Returns Success(:corrected) if a correction was applied,
     # nil otherwise so the caller can continue to the next handler.
     def maybe_handle_correction
-      return nil unless IntentMatchers.correction_intent?(body)
       return nil unless conversation.service_id.present? || conversation.requested_starts_at.present?
 
       result = CorrectionDetector.call(body: body, conversation: conversation, account: account, history: turn_history)

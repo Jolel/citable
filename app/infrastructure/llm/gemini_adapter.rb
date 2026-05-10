@@ -8,7 +8,7 @@ module Llm
   # Override the model at runtime via credentials (gemini.model).
   # Verify the current model ID at https://ai.google.dev/gemini-api/docs/models
   class GeminiAdapter < Port
-    DEFAULT_MODEL = "gemini-2.5-pro"
+    DEFAULT_MODEL = "gemini-2.5-flash"
     TIMEOUT       = 4 # seconds
 
     def initialize(api_key: nil, model: nil)

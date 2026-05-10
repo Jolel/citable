@@ -5,14 +5,12 @@ module TwilioWebhook
   # applies the updated slots to the conversation, rewinding the step to the
   # earliest step implied by what changed.
   #
-  # Guard conditions (both must hold):
-  # 1. Body contains a correction keyword (IntentMatchers.correction_intent?).
-  # 2. At least one slot is already locked (service_id or requested_starts_at).
-  #    This prevents false positives on first-turn messages like "mejor el lunes".
+  # Guard condition: at least one slot must already be locked (service_id or
+  # requested_starts_at). This prevents false positives on first-turn messages.
   #
   # Returns:
   #   Success({ rewound_to:, applied_slots:, input_tokens:, output_tokens:, model: })
-  #   Failure(:no_correction | :no_locked_slots | :nothing_changed | :llm_error)
+  #   Failure(:no_locked_slots | :nothing_changed | :llm_error)
   class CorrectionDetector
     include Dry::Monads[:result]
 
@@ -21,7 +19,6 @@ module TwilioWebhook
     end
 
     def call(body:, conversation:, account:, history: [])
-      return Failure(:no_correction)   unless IntentMatchers.correction_intent?(body)
       return Failure(:no_locked_slots) unless locked_slot?(conversation)
 
       services   = account.services.active.order(:name)

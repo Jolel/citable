@@ -144,45 +144,6 @@ RSpec.describe TwilioWebhook::StartConversation do
     end
   end
 
-  # ─── deterministic Q&A before booking (always active) ──────────────────────
-
-  describe "deterministic question answering (ai disabled)" do
-    before do
-      account.update!(ai_nlu_enabled: false)
-      create(:service, account: account, name: "Corte")
-    end
-
-    it "answers a services_list question without calling any LLM" do
-      expect(Llm::QuestionClassifier).not_to receive(:call)
-
-      result = call(body: "con que servicios cuentan")
-
-      expect(result).to be_success.and(have_attributes(value!: :answered_question))
-      body = account.message_logs.outbound.order(:created_at).last.body
-      expect(body).to include("Corte")
-    end
-
-    it "answers an address question without calling any LLM" do
-      account.update!(address: "Av. Insurgentes 100")
-      expect(Llm::QuestionClassifier).not_to receive(:call)
-
-      result = call(body: "dónde están ubicados")
-
-      expect(result).to be_success.and(have_attributes(value!: :answered_question))
-      body = account.message_logs.outbound.order(:created_at).last.body
-      expect(body).to include("Av. Insurgentes 100")
-    end
-
-    it "falls through to the booking flow for a bare greeting" do
-      expect(Llm::QuestionClassifier).not_to receive(:call)
-
-      result = call(body: "Hola")
-
-      expect(result.value!).not_to eq(:answered_question)
-      expect(account.whatsapp_conversations.count).to eq(1)
-    end
-  end
-
   # ─── question-answering branch ─────────────────────────────────────────────
 
   describe "question-answering branch" do
@@ -215,11 +176,13 @@ RSpec.describe TwilioWebhook::StartConversation do
       expect(account.whatsapp_conversations.last.step).to eq("awaiting_service")
     end
 
-    it "skips the classifier when ai_nlu_enabled is false" do
+    it "skips the classifier when ai_nlu_enabled is false and falls through to booking flow" do
       account.update!(ai_nlu_enabled: false)
       expect(Llm::QuestionClassifier).not_to receive(:call)
 
-      call(customer: customer, body: "¿qué hacen?")
+      result = call(customer: customer, body: "¿qué hacen?")
+
+      expect(result).to be_success.and(have_attributes(value!: "awaiting_service"))
     end
 
     it "skips the classifier when body is blank" do

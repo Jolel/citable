@@ -57,33 +57,11 @@ RSpec.describe TwilioWebhook::ProcessBookingReply do
       expect(log.body).to include("Tienes una cita el")
     end
 
-    it "opens cancellation confirmation for a Spanish cancel phrase (no AI needed)" do
-      expect { call(body: "Quisiera cancelar mi cita") }
-        .to change(WhatsappConversation, :count).by(1)
-
-      expect(booking.reload.status).to eq("pending")
-      log = account.message_logs.outbound.order(:created_at).last
-      expect(log.body).to include("¿Seguro que quieres cancelar")
-    end
-
-    it "answers appointment date question without calling the LLM" do
-      expect(Llm::QuestionClassifier).not_to receive(:call)
-
-      call(body: "cuando es mi cita")
+    it "sends fallback for a cancellation phrase when AI is disabled" do
+      expect { call(body: "Quisiera cancelar mi cita") }.not_to change(WhatsappConversation, :count)
 
       log = account.message_logs.outbound.order(:created_at).last
-      expect(log.body).to include("Tu cita es el")
-      expect(log.body).not_to include("Tienes una cita el")
-    end
-
-    it "answers address question without calling the LLM" do
-      expect(Llm::QuestionClassifier).not_to receive(:call)
-      account.update!(address: "Calle Falsa 123")
-
-      call(body: "cual es la direccion")
-
-      log = account.message_logs.outbound.order(:created_at).last
-      expect(log.body).to include("Calle Falsa 123")
+      expect(log.body).to include("Tienes una cita el")
     end
   end
 
@@ -124,77 +102,35 @@ RSpec.describe TwilioWebhook::ProcessBookingReply do
       end
     end
 
-    context "when the customer asks about business hours (ai disabled)" do
-      it "answers with hours without calling the classifier" do
-        expect(Llm::QuestionClassifier).not_to receive(:call)
+    context "when the classifier returns :hours" do
+      before do
+        allow(Llm::QuestionClassifier).to receive(:call).and_return(
+          Success(base_classifier_hash.merge(intent: :hours))
+        )
+      end
 
+      it "answers with business hours" do
         call(body: "Cual es su horario")
 
         log = account.message_logs.outbound.order(:created_at).last
         expect(log.body).to match(/Lunes|horarios|cerrado/i)
         expect(log.body).not_to include("Tienes una cita")
       end
-
-      it "also matches 'cuando abren'" do
-        expect(Llm::QuestionClassifier).not_to receive(:call)
-
-        call(body: "cuando abren")
-
-        log = account.message_logs.outbound.order(:created_at).last
-        expect(log.body).to match(/Lunes|horarios|cerrado/i)
-      end
     end
 
-    context "when the customer asks about available services (ai disabled)" do
-      it "answers with the services list without calling the classifier" do
-        expect(Llm::QuestionClassifier).not_to receive(:call)
+    context "when the classifier returns :services_list" do
+      before do
+        allow(Llm::QuestionClassifier).to receive(:call).and_return(
+          Success(base_classifier_hash.merge(intent: :services_list))
+        )
+      end
 
+      it "answers with the services list" do
         call(body: "con que servicios cuentan")
 
         log = account.message_logs.outbound.order(:created_at).last
         expect(log.body).to include("Corte de cabello")
         expect(log.body).not_to include("Tienes una cita")
-      end
-
-      it "also matches 'que servicios tienen'" do
-        expect(Llm::QuestionClassifier).not_to receive(:call)
-
-        call(body: "que servicios tienen")
-
-        log = account.message_logs.outbound.order(:created_at).last
-        expect(log.body).to include("Corte de cabello")
-      end
-    end
-
-    context "when the customer asks about the cost of their own appointment" do
-      it "answers with the booked service price without calling the classifier" do
-        expect(Llm::QuestionClassifier).not_to receive(:call)
-
-        call(body: "que costo tendra mi cita")
-
-        log = account.message_logs.outbound.order(:created_at).last
-        expect(log.body).to include("Corte de cabello cuesta")
-        expect(log.body).not_to include("¿Quieres reservar una cita?")
-        expect(log.body).not_to include("Tienes una cita")
-      end
-
-      it "also matches 'cuanto tendre que pagar'" do
-        expect(Llm::QuestionClassifier).not_to receive(:call)
-
-        call(body: "cuanto tendre que pagar")
-
-        log = account.message_logs.outbound.order(:created_at).last
-        expect(log.body).to include("Corte de cabello cuesta")
-        expect(log.body).not_to include("¿Quieres reservar una cita?")
-      end
-
-      it "does NOT short-circuit when asking about a specific service by name" do
-        allow(Llm::QuestionClassifier).to receive(:call).and_return(
-          Success(base_classifier_hash.merge(intent: :price, service: service))
-        )
-
-        expect(Llm::QuestionClassifier).to receive(:call)
-        call(body: "¿cuánto cuesta el corte de cabello?")
       end
     end
 

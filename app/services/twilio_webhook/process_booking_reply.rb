@@ -52,57 +52,6 @@ module TwilioWebhook
     # ── free text ─────────────────────────────────────────────────────────────
 
     def handle_free_text
-      # Deterministic layer — always active regardless of ai_nlu_enabled.
-      # Order matters: cancel check before other questions so "Quisiera cancelar"
-      # is never misclassified as a price question.
-
-      if IntentMatchers.cancellation_intent?(body)
-        return open_cancellation_confirmation
-      end
-
-      if IntentMatchers.greeting_only?(body)
-        send_message(fallback_message)
-        return Success(:fallback_sent)
-      end
-
-      if IntentMatchers.asking_about_appointment_cost?(body)
-        answer = AnswerQuestion.call(
-          intent: :price, service: nil, account: account,
-          cta: nil, booking: booking, customer: customer
-        )
-        send_message(answer)
-        return Success(:answered_question)
-      end
-
-      if IntentMatchers.asking_about_appointment_date?(body) || IntentMatchers.asking_to_list_appointments?(body)
-        answer = AnswerQuestion.call(
-          intent: :appointment_date, service: nil, account: account,
-          cta: nil, booking: booking, customer: customer
-        )
-        send_message(answer)
-        return Success(:answered_question)
-      end
-
-      if IntentMatchers.asking_about_hours?(body)
-        answer = AnswerQuestion.call(intent: :hours, service: nil, account: account, cta: nil)
-        send_message(answer)
-        return Success(:answered_question)
-      end
-
-      if IntentMatchers.asking_about_services?(body)
-        answer = AnswerQuestion.call(intent: :services_list, service: nil, account: account, cta: nil)
-        send_message(answer)
-        return Success(:answered_question)
-      end
-
-      if IntentMatchers.asking_about_address?(body)
-        answer = AnswerQuestion.call(intent: :address, service: nil, account: account, cta: nil)
-        send_message(answer)
-        return Success(:answered_question)
-      end
-
-      # AI classifier for remaining intents (booking re-schedule, specific price
-      # queries by service name, etc.).
       classification = classify
 
       case classification && classification[:intent]

@@ -264,14 +264,21 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
       end
     end
 
-    context "Mexican-Spanish affirmative variants in confirm_booking" do
+    context "Mexican-Spanish affirmative variants in confirm_booking (via NLU)" do
+      let(:confirmed_nlu) do
+        Success({ value: :confirmed, input_tokens: 60, output_tokens: 10,
+                  model: Llm::GeminiAdapter::DEFAULT_MODEL })
+      end
+
       before do
         user  # ensure a staff member exists
+        account.update!(ai_nlu_enabled: true)
         conversation.update!(
           step:                "confirming_booking",
           service:             service,
           requested_starts_at: 1.day.from_now
         )
+        allow(Llm::NluParser).to receive(:parse_confirmation).and_return(confirmed_nlu)
       end
 
       %w[simón obvio sale].each do |word|
@@ -285,13 +292,20 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
       end
     end
 
-    context "Mexican-Spanish negative variants in confirm_booking" do
+    context "Mexican-Spanish negative variants in confirm_booking (via NLU)" do
+      let(:cancelled_nlu) do
+        Success({ value: :cancelled, input_tokens: 60, output_tokens: 10,
+                  model: Llm::GeminiAdapter::DEFAULT_MODEL })
+      end
+
       before do
+        account.update!(ai_nlu_enabled: true)
         conversation.update!(
           step:                "confirming_booking",
           service:             service,
           requested_starts_at: 1.day.from_now
         )
+        allow(Llm::NluParser).to receive(:parse_confirmation).and_return(cancelled_nlu)
       end
 
       %w[nones].each do |word|
@@ -310,16 +324,7 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
   describe "collect_datetime" do
     before { conversation.update!(step: "awaiting_datetime", service: service) }
 
-    context "when the customer uses a strict format" do
-      it "advances without calling the extractor" do
-        expect(Llm::BookingSlotExtractor).not_to receive(:call)
-        result = call(body: "2026-05-10 15:00", step: "awaiting_datetime")
-        expect(result).to be_success
-        expect(conversation.reload.step).to eq("confirming_booking")
-      end
-    end
-
-    context "when ai_nlu_enabled is false and format is unrecognized" do
+    context "when ai_nlu_enabled is false" do
       it "re-prompts without calling the extractor" do
         expect(Llm::BookingSlotExtractor).not_to receive(:call)
         result = call(body: "viernes a las 3", step: "awaiting_datetime")
@@ -539,61 +544,6 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
 
         expect(result).to be_failure.and(have_attributes(failure: :missing_booking))
       end
-    end
-  end
-
-  # ─── deterministic mid-flow Q&A (always active) ─────────────────────────────
-
-  describe "deterministic question answering (ai disabled)" do
-    before do
-      service
-      account.update!(ai_nlu_enabled: false)
-      conversation.update!(step: "awaiting_service")
-    end
-
-    it "answers a services_list question without calling any LLM" do
-      expect(Llm::QuestionClassifier).not_to receive(:call)
-
-      result = call(body: "con que servicios cuentan")
-
-      expect(result).to be_success.and(have_attributes(value!: :answered_question))
-      expect(conversation.reload.step).to eq("awaiting_service")
-      body = account.message_logs.outbound.order(:created_at).last.body
-      expect(body).to include(service.name)
-    end
-
-    it "answers a hours question without calling any LLM" do
-      expect(Llm::QuestionClassifier).not_to receive(:call)
-
-      result = call(body: "cual es su horario")
-
-      expect(result).to be_success.and(have_attributes(value!: :answered_question))
-      body = account.message_logs.outbound.order(:created_at).last.body
-      expect(body).to match(/horario|Lunes|cerrado/i)
-    end
-  end
-
-  describe "greeting mid-flow" do
-    before do
-      service
-      conversation.update!(step: "awaiting_service")
-    end
-
-    it "re-sends the current step prompt and does not advance" do
-      expect(Llm::QuestionClassifier).not_to receive(:call)
-
-      result = call(body: "Hola")
-
-      expect(result).to be_success.and(have_attributes(value!: :greeted))
-      expect(conversation.reload.step).to eq("awaiting_service")
-      body = account.message_logs.outbound.order(:created_at).last.body
-      expect(body).to include("Elige un servicio")
-    end
-
-    it "does not treat 'Hola quiero un corte' as a greeting" do
-      result = call(body: "Hola quiero un corte")
-
-      expect(result.value!).not_to eq(:greeted)
     end
   end
 
@@ -880,7 +830,6 @@ RSpec.describe TwilioWebhook::AdvanceConversation do
         .with(hash_including(history: fake_history))
         .and_return(Failure(:llm_error))
 
-      # "el próximo viernes" fails deterministic parse_datetime, so it reaches the LLM
       call(body: "el próximo viernes", step: "awaiting_datetime")
     end
 

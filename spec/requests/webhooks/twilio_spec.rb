@@ -125,7 +125,32 @@ RSpec.describe "Webhooks::Twilio", type: :request do
     end
 
     context "guided booking flow" do
+      include Dry::Monads[:result]
+
       let!(:owner) { create(:user, :owner, account: account, name: "Owner") }
+
+      def extractor_with_time(time)
+        Success({
+          slots:          { service: nil, starts_at: time, address: nil, confirmation: nil },
+          confidences:    { service: 0.0, datetime: 0.92, address: 0.0, confirmation: 0.0 },
+          top_candidates: [],
+          input_tokens:   80, output_tokens: 14, model: "test"
+        })
+      end
+
+      before do
+        account.update!(ai_nlu_enabled: true)
+        allow(Llm::GreetingGenerator).to receive(:call).and_return(Failure(:llm_error))
+        allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:not_a_question))
+        allow(Llm::ScopeClassifier).to receive(:call).and_return(Failure(:not_out_of_scope))
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(Failure(:llm_error))
+        allow(Llm::BookingSlotExtractor).to receive(:call)
+          .with(hash_including(body: "2026-04-26 15:00"))
+          .and_return(extractor_with_time(Time.zone.local(2026, 4, 26, 15, 0)))
+        allow(Llm::BookingSlotExtractor).to receive(:call)
+          .with(hash_including(body: "2026-04-27 15:00"))
+          .and_return(extractor_with_time(Time.zone.local(2026, 4, 27, 15, 0)))
+      end
 
       it "creates a booking for a new customer" do
         expect {

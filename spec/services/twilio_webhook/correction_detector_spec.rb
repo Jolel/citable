@@ -35,14 +35,6 @@ RSpec.describe TwilioWebhook::CorrectionDetector do
   end
 
   describe ".call" do
-    context "when body has no correction keyword" do
-      it "returns Failure(:no_correction)" do
-        conv = conversation_at(step: "confirming_booking", service: service, starts_at: locked_time)
-        result = described_class.call(body: "el viernes a las 3", conversation: conv, account: account)
-        expect(result).to be_failure.and(have_attributes(failure: :no_correction))
-      end
-    end
-
     context "when no slots are locked yet" do
       it "returns Failure(:no_locked_slots)" do
         conv = conversation_at(step: "awaiting_service")

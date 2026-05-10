@@ -11,19 +11,6 @@ module TwilioWebhook
       name = profile_name
       resolved_customer = customer || create_customer_from_profile(account:, phone:, name:)
 
-      # Deterministic check first (always active, no LLM round-trip).
-      # Greetings fall through so a bare "Hola" starts the booking flow normally.
-      if body.present? && !IntentMatchers.greeting_only?(body)
-        if (intent = deterministic_intent(body))
-          message = AnswerQuestion.call(
-            intent: intent, service: nil, account: account, customer: resolved_customer
-          )
-          send_message(account:, to: phone, body: message, customer: resolved_customer)
-          return Success(:answered_question)
-        end
-      end
-
-      # LLM-based question classification (only when AI is enabled).
       if (question = classify_question(account:, body:, customer: resolved_customer))
         answer_question(account:, phone:, customer: resolved_customer, question:)
         return Success(:answered_question)
@@ -52,17 +39,6 @@ module TwilioWebhook
       account.customers.create!(name:, phone:)
     end
 
-    # Maps body to a deterministic intent symbol, or nil if no pattern matched.
-    # Does NOT handle appointment_date/list_appointments — those require an active
-    # booking and are only wired in AdvanceConversation/ProcessBookingReply.
-    def deterministic_intent(body)
-      if IntentMatchers.asking_about_appointment_cost?(body) then :price
-      elsif IntentMatchers.asking_about_services?(body)       then :services_list
-      elsif IntentMatchers.asking_about_hours?(body)          then :hours
-      elsif IntentMatchers.asking_about_address?(body)        then :address
-      end
-    end
-
     # Returns the unwrapped hash or nil. nil = not a question we answer;
     # caller falls through to normal booking greeting.
     def classify_question(account:, body:, customer:)
@@ -84,7 +60,7 @@ module TwilioWebhook
         intent: question[:intent], service: question[:service],
         account: account, customer: customer
       )
-      send_message(message, account:, phone:, customer:)
+      send_message(account:, to: phone, body: message, customer:)
     end
 
     def create_conversation(account:, phone:, customer:, step:)
