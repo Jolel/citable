@@ -69,14 +69,18 @@ class Booking < ApplicationRecord
   end
 
   def schedule_reminder_jobs
-    ReminderSchedule.find_or_create_by!(account: account, booking: self, kind: "24h") do |r|
-      r.scheduled_for = starts_at - 24.hours
+    now = Time.current
+    [
+      { kind: "24h", fire_at: starts_at - 24.hours },
+      { kind: "2h",  fire_at: starts_at - 2.hours  }
+    ].each do |reminder|
+      next if reminder[:fire_at] <= now
+
+      ReminderSchedule.find_or_create_by!(account: account, booking: self, kind: reminder[:kind]) do |r|
+        r.scheduled_for = reminder[:fire_at]
+      end
+      ReminderJob.set(wait_until: reminder[:fire_at]).perform_later(id, reminder[:kind])
     end
-    ReminderSchedule.find_or_create_by!(account: account, booking: self, kind: "2h") do |r|
-      r.scheduled_for = starts_at - 2.hours
-    end
-    ReminderJob.set(wait_until: starts_at - 24.hours).perform_later(id, "24h")
-    ReminderJob.set(wait_until: starts_at - 2.hours).perform_later(id, "2h")
   end
 
   def enqueue_google_calendar_create

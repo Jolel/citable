@@ -100,7 +100,8 @@ RSpec.describe ReminderSchedule, type: :model do
     it "sets sent_at to current time" do
       account = create(:account)
       booking = create(:booking, account: account, user: create(:user, account: account),
-                       service: create(:service, account: account), customer: create(:customer, account: account))
+                       service: create(:service, account: account), customer: create(:customer, account: account),
+                       starts_at: 3.days.from_now.change(hour: 10, min: 0))
       schedule = booking.reminder_schedules.find_by(kind: "24h")
 
       freeze_time do

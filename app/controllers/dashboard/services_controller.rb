@@ -52,7 +52,7 @@ class Dashboard::ServicesController < Dashboard::BaseController
 
   def service_params
     params.require(:service).permit(
-      :name, :duration_minutes, :price_cents, :requires_address, :deposit_amount_cents
+      :name, :description, :duration_minutes, :price_cents, :requires_address, :deposit_amount_cents
     )
   end
 end

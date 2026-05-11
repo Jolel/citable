@@ -112,12 +112,11 @@ RSpec.describe WhatsappSendJob, type: :job do
         expect(body).to include("Estudio Ana")
       end
 
-      it "builds a 24h reminder message asking for confirmation" do
+      it "builds a 24h reminder message" do
         described_class.perform_now(booking.id, :"24h")
         body = MessageLog.last.body
         expect(body).to include("mañana")
-        expect(body).to include("1")
-        expect(body).to include("2")
+        expect(body).to include("cancelar")
       end
 
       it "builds a 2h reminder message" do

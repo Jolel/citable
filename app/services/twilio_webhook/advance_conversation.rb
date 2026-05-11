@@ -12,12 +12,22 @@ module TwilioWebhook
       @account = account
       @from_phone = from_phone
 
+      if account.ai_nlu_enabled? && !confirmation_digit?(body)
+        correction = maybe_handle_correction
+        return correction if correction
+
+        question_result = maybe_answer_question
+        return question_result if question_result
+      end
+
       case conversation.step
-      when "awaiting_name"      then collect_name
-      when "awaiting_service"   then collect_service
-      when "awaiting_datetime"  then collect_datetime
-      when "awaiting_address"   then collect_address
-      when "confirming_booking" then confirm_booking
+      when "awaiting_name"           then collect_name
+      when "awaiting_service"        then collect_service
+      when "awaiting_disambiguation" then resolve_disambiguation
+      when "awaiting_datetime"       then collect_datetime
+      when "awaiting_address"        then collect_address
+      when "confirming_booking"      then confirm_booking
+      when "confirming_cancellation" then confirm_cancellation
       else
         Failure(:unknown_step)
       end
@@ -41,27 +51,116 @@ module TwilioWebhook
     end
 
     def collect_service
-      idx = service_index
+      # Deterministic: bare digit input
+      idx     = service_index
       service = idx && idx >= 0 ? active_services[idx] : nil
 
+      # Multi-slot LLM extraction
+      if service.nil? && account.ai_nlu_enabled?
+        service = extracted_slots&.dig(:service)
+      end
+
       unless service
+        # Disambiguation: medium-confidence candidates available → targeted question.
+        if account.ai_nlu_enabled? && extracted_candidates.any?
+          dis = Disambiguator.call(slot: :service, candidates: extracted_candidates, conversation: conversation)
+          conversation.update!(
+            step:     "awaiting_disambiguation",
+            metadata: conversation.metadata.merge("disambiguation" => dis[:metadata])
+          )
+          send_message(dis[:message], customer: conversation.customer)
+          return Success(:awaiting_disambiguation)
+        end
+
         send_service_prompt(prefix: "No encontré esa opción. Por favor elige un servicio:")
         return Success(:awaiting_service)
       end
 
+      # Skip-ahead: if the same message also provided a datetime, jump directly
+      # to the confirmation step instead of asking for the date again.
+      starts_at = account.ai_nlu_enabled? ? extracted_slots&.dig(:starts_at) : nil
+
+      if starts_at
+        next_step = service.requires_address? ? "awaiting_address" : "confirming_booking"
+        conversation.update!(service: service, requested_starts_at: starts_at, step: next_step)
+        if service.requires_address?
+          send_message("Este servicio requiere dirección. ¿Cuál es la dirección de la cita?", customer: conversation.customer)
+          return Success(:awaiting_address)
+        else
+          send_confirmation_prompt
+          return Success(:confirming_booking)
+        end
+      end
+
       conversation.update!(service: service, step: "awaiting_datetime")
-      send_message(
-        "Perfecto. ¿Qué fecha y hora quieres? Ejemplos: 2026-04-26 15:00, 26/04/2026 15:00 o mañana 15:00.",
-        customer: conversation.customer
-      )
+      send_message(datetime_prompt, customer: conversation.customer)
       Success(:awaiting_datetime)
     end
 
+    def resolve_disambiguation
+      dis = conversation.metadata["disambiguation"]
+      return fall_back_to_service_list unless dis
+
+      candidate_ids = dis["candidates"] || []
+      candidates    = active_services.select { |s| candidate_ids.include?(s.id) }
+
+      if dis["slot"] == "service"
+        resolve_service_disambiguation(candidates)
+      else
+        fall_back_to_service_list
+      end
+    end
+
+    def resolve_service_disambiguation(candidates)
+      # (a) Digit: "1" → first candidate, "2" → second, etc.
+      if (idx = service_index) && idx >= 0 && idx < candidates.size
+        return advance_with_service(candidates[idx])
+      end
+
+      # (b) LLM re-extraction — user paraphrased with a new message
+      if account.ai_nlu_enabled?
+        if (svc = extracted_slots&.dig(:service)) && candidates.include?(svc)
+          return advance_with_service(svc)
+        end
+      end
+
+      # (c) LLM-confirmed affirmative when only one candidate remains
+      if candidates.size == 1
+        confirm = Llm::NluParser.parse_confirmation(body)
+        if confirm.success? && confirm.value![:value] == :confirmed
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: confirm.value!)
+          return advance_with_service(candidates.first)
+        end
+      end
+
+      # Still ambiguous — clear and fall back to the full service list.
+      fall_back_to_service_list
+    end
+
+    def advance_with_service(service)
+      conversation.update!(
+        service:  service,
+        step:     "awaiting_datetime",
+        metadata: conversation.metadata.except("disambiguation")
+      )
+      send_message(datetime_prompt, customer: conversation.customer)
+      Success(:awaiting_datetime)
+    end
+
+    def fall_back_to_service_list
+      conversation.update!(
+        step:     "awaiting_service",
+        metadata: conversation.metadata.except("disambiguation")
+      )
+      send_service_prompt(prefix: "No entendí. Por favor elige un servicio:")
+      Success(:awaiting_service)
+    end
+
     def collect_datetime
-      starts_at = parse_datetime(body)
+      starts_at = account.ai_nlu_enabled? ? extracted_slots&.dig(:starts_at) : nil
 
       unless starts_at
-        send_message("No pude entender la fecha. Intenta con 2026-04-26 15:00 o 26/04/2026 15:00.", customer: conversation.customer)
+        send_message(datetime_reprompt, customer: conversation.customer)
         return Success(:awaiting_datetime)
       end
 
@@ -84,8 +183,59 @@ module TwilioWebhook
     end
 
     def confirm_booking
-      case body
-      when "1"
+      decision = rigid_decision || nlu_decision
+      apply_decision(decision)
+    end
+
+    def confirm_cancellation
+      booking = conversation.booking
+      return Failure(:missing_booking) if booking.nil?
+
+      decision = rigid_decision || nlu_decision
+      case decision
+      when :confirmed
+        booking.cancel!
+        conversation.update!(step: "completed")
+        send_message("Listo, cancelé tu cita del #{format_starts_at(booking.starts_at)}.", customer: conversation.customer, booking: booking)
+        Success(:cancelled_booking)
+      when :cancelled
+        conversation.update!(step: "completed")
+        send_message("Perfecto, mantenemos tu cita del #{format_starts_at(booking.starts_at)}.", customer: conversation.customer, booking: booking)
+        Success(:kept_booking)
+      else
+        hint = account.ai_nlu_enabled? ? "Escribe *sí* para cancelarla o *no* para mantenerla." : "Responde 1 para cancelar o 2 para mantenerla."
+        send_message(
+          "¿Seguro que quieres cancelar tu cita del #{format_starts_at(booking.starts_at)}? #{hint}",
+          customer: conversation.customer,
+          booking: booking
+        )
+        Success(:confirming_cancellation)
+      end
+    end
+
+    def format_starts_at(time)
+      time.in_time_zone(account.timezone).strftime("%d/%m/%Y %H:%M")
+    end
+
+    def rigid_decision
+      return :confirmed if body == "1"
+      return :cancelled if body == "2"
+      nil
+    end
+
+    def nlu_decision
+      return unless account.ai_nlu_enabled?
+
+      nlu = Llm::NluParser.parse_confirmation(body)
+      return unless nlu.success?
+
+      TwilioWebhook::AiUsageRecorder.record(account: account, hash: nlu.value!)
+      nlu.value![:value]
+    end
+
+    def apply_decision(decision)
+      case decision
+      when :confirmed
         booking = create_booking
         conversation.update!(booking: booking)
         conversation.complete!
@@ -95,12 +245,12 @@ module TwilioWebhook
           booking: booking
         )
         Success(booking)
-      when "2"
+      when :cancelled
         conversation.update!(step: "cancelled")
         send_message("Sin problema, cancelé esta solicitud. Escríbenos de nuevo cuando quieras reservar.", customer: conversation.customer)
         Success(:cancelled)
       else
-        send_confirmation_prompt(prefix: "Responde 1 para confirmar o 2 para cancelar.")
+        send_confirmation_prompt(prefix: "No entendí tu respuesta.")
         Success(:confirming_booking)
       end
     end
@@ -130,22 +280,182 @@ module TwilioWebhook
       nil
     end
 
-    def parse_datetime(value)
-      text = value.to_s.strip.downcase
-
-      if text.match?(/\A(?:mañana|manana)\s+\d{1,2}:\d{2}\z/)
-        time = text.split.last
-        hour, minute = time.split(":").map(&:to_i)
-        return (Time.zone.today + 1.day).in_time_zone.change(hour: hour, min: minute)
-      end
-
-      parse_with_format(value, "%Y-%m-%d %H:%M") || parse_with_format(value, "%d/%m/%Y %H:%M")
+    def turn_history
+      @turn_history ||= TurnHistory.for(
+        account:      account,
+        customer:     conversation.customer,
+        conversation: conversation
+      )
     end
 
-    def parse_with_format(value, format)
-      Time.zone.strptime(value, format)
-    rescue ArgumentError
+    # Runs BookingSlotExtractor once per #call invocation (memoized) and records
+    # AI token usage on the inbound MessageLog.  Returns the full result hash or nil.
+    def extraction_result
+      return @_extraction_result if instance_variable_defined?(:@_extraction_result)
+
+      @_extraction_result = begin
+        result = Llm::BookingSlotExtractor.call(body: body, services: active_services, history: turn_history)
+        if result.success?
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: result.value!)
+          result.value!
+        end
+      end
+    end
+
+    def extracted_slots
+      extraction_result&.dig(:slots)
+    end
+
+    def extracted_candidates
+      extraction_result&.fetch(:top_candidates, nil) || []
+    end
+
+    # ── prompt text helpers ───────────────────────────────────────────────────
+
+    def datetime_prompt
+      if account.ai_nlu_enabled?
+        "¿Para cuándo quieres tu cita? Puedes escribirlo como quieras, " \
+          "por ejemplo: el viernes a las 3, mañana a las 10am, el lunes próximo a las 5pm."
+      else
+        "Perfecto. ¿Qué fecha y hora quieres? " \
+          "Ejemplos: #{Time.zone.today.strftime("%Y-%m-%d")} 15:00, " \
+          "#{Time.zone.today.strftime("%d/%m/%Y")} 15:00 o mañana 15:00."
+      end
+    end
+
+    def datetime_reprompt
+      if account.ai_nlu_enabled?
+        "No pude entender la fecha. ¿Puedes escribirla de otra forma? " \
+          "Por ejemplo: el viernes a las 3, mañana a las 10am, el próximo lunes."
+      else
+        "No pude entender la fecha. " \
+          "Intenta con #{Time.zone.today.strftime("%Y-%m-%d")} 15:00 " \
+          "o #{Time.zone.today.strftime("%d/%m/%Y")} 15:00."
+      end
+    end
+
+    def confirmation_hint
+      if account.ai_nlu_enabled?
+        "Escribe *sí* para confirmar o *no* si quieres cambiar algo."
+      else
+        "Responde 1 para confirmar o 2 para cancelar."
+      end
+    end
+
+    def confirmation_digit?(body)
+      %w[1 2].include?(body.to_s.strip)
+    end
+
+    def awaiting_decision?
+      %w[confirming_booking confirming_cancellation].include?(conversation.step)
+    end
+
+    # LLM-backed question classification — only runs when ai_nlu_enabled and
+    # deterministic layer didn't match.
+    # Returns Success(:answered_question) or nil.
+    def maybe_answer_question
+      answerable = Llm::QuestionClassifier::QUESTION_INTENTS +
+                   Llm::QuestionClassifier::BOOKING_CONTEXT_INTENTS
+
+      result = Llm::QuestionClassifier.call(body, services: active_services, account: account, history: turn_history)
+
+      if result.success?
+        data = result.value!
+
+        if answerable.include?(data[:intent].to_s)
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: data)
+          answer = AnswerQuestion.call(
+            intent: data[:intent], service: data[:service], account: account,
+            cta: current_step_prompt_text, customer: conversation.customer
+          )
+          send_message(answer, customer: conversation.customer)
+          return Success(:answered_question)
+        end
+
+        if data[:intent] == :out_of_scope
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: data)
+          return send_out_of_scope_answer
+        end
+      end
+
+      # QuestionClassifier didn't find an answerable intent.
+      # Try ScopeClassifier as fallback for out-of-scope FAQs.
+      # Skip for very short replies ("ok", "sí") that are clearly not questions.
+      if body.split.length > 2
+        scope = Llm::ScopeClassifier.call(body: body, account: account, history: turn_history)
+        if scope.success?
+          TwilioWebhook::AiUsageRecorder.record(account: account, hash: scope.value!)
+          return send_out_of_scope_answer
+        end
+      end
+
       nil
+    end
+
+    def send_out_of_scope_answer
+      answer = AnswerQuestion.call(
+        intent: :out_of_scope, service: nil, account: account,
+        cta: current_step_prompt_text, customer: conversation.customer
+      )
+      send_message(answer, customer: conversation.customer)
+      Success(:answered_question)
+    end
+
+    # Checks for a mid-flow correction ("espera, mejor el viernes a las 5") and
+    # applies updated slots.  Returns Success(:corrected) if a correction was applied,
+    # nil otherwise so the caller can continue to the next handler.
+    def maybe_handle_correction
+      return nil unless conversation.service_id.present? || conversation.requested_starts_at.present?
+
+      result = CorrectionDetector.call(body: body, conversation: conversation, account: account, history: turn_history)
+      return nil unless result.success?
+
+      TwilioWebhook::AiUsageRecorder.record(account: account, hash: result.value!)
+
+      # conversation.step was updated by CorrectionDetector; re-prompt that step.
+      case conversation.step
+      when "confirming_booking"
+        send_confirmation_prompt(prefix: "¡Listo, actualicé tu cita!")
+      when "awaiting_datetime"
+        send_message(datetime_prompt, customer: conversation.customer)
+      when "awaiting_address"
+        send_message("Este servicio requiere dirección. ¿Cuál es la dirección de la cita?", customer: conversation.customer)
+      when "awaiting_service"
+        send_service_prompt
+      end
+
+      Success(:corrected)
+    end
+
+    # Returns the re-prompt text for the current step.
+    # Used as the CTA footer inside question answers (one outbound message).
+    # confirming_booking uses the short hint to avoid repeating the full block.
+    def current_step_prompt_text
+      case conversation.step
+      when "awaiting_name"
+        "Para continuar, ¿cuál es tu nombre completo?"
+      when "awaiting_service"
+        lines = active_services.each_with_index.map { |svc, i| "#{i + 1}. #{svc.name} (#{svc.duration_label})" }
+        ([ "Elige un servicio:" ] + lines).join("\n")
+      when "awaiting_disambiguation"
+        dis = conversation.metadata["disambiguation"]
+        return nil unless dis
+        if dis["slot"] == "service"
+          candidate_ids = dis["candidates"] || []
+          candidates    = active_services.select { |s| candidate_ids.include?(s.id) }
+          Disambiguator.call(slot: :service, candidates: candidates, conversation: conversation)[:message]
+        end
+      when "awaiting_datetime"
+        datetime_prompt
+      when "awaiting_address"
+        "Este servicio requiere dirección. ¿Cuál es la dirección de la cita?"
+      when "confirming_booking"
+        confirmation_hint
+      when "confirming_cancellation"
+        booking = conversation.booking
+        return nil unless booking
+        account.ai_nlu_enabled? ? "Escribe *sí* para cancelarla o *no* para mantenerla." : "Responde 1 para cancelar o 2 para mantenerla."
+      end
     end
 
     def send_service_prompt(prefix: "Elige un servicio:")
@@ -156,13 +466,13 @@ module TwilioWebhook
     end
 
     def send_confirmation_prompt(prefix: nil)
-      starts_at = conversation.requested_starts_at.in_time_zone(account.timezone).strftime("%d/%m/%Y %H:%M")
+      time = conversation.requested_starts_at.in_time_zone(account.timezone)
       lines = []
       lines << prefix if prefix.present?
-      lines << "Confirma tu cita:"
-      lines << "#{conversation.service.name} - #{starts_at}"
+      lines << "¿Te queda bien esta cita? 😊"
+      lines << "*#{conversation.service.name}* — #{localized_appointment_str(time)}"
       lines << "Dirección: #{conversation.address}" if conversation.address.present?
-      lines << "Responde 1 para confirmar o 2 para cancelar."
+      lines << confirmation_hint
       send_message(lines.join("\n"), customer: conversation.customer)
     end
 
@@ -174,6 +484,12 @@ module TwilioWebhook
         booking: booking,
         customer: customer || conversation.customer
       )
+    end
+
+    def localized_appointment_str(time)
+      day   = I18n.t("date.day_names",   locale: :"es-MX")[time.wday]
+      month = I18n.t("date.month_names", locale: :"es-MX")[time.month]
+      "el #{day} #{time.day} de #{month} a las #{time.strftime("%H:%M")}"
     end
   end
 end

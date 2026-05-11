@@ -61,6 +61,14 @@ gem "google-apis-calendar_v3"
 # Monadic result objects (Success/Failure)
 gem "dry-monads"
 
+# Schema/contract validation for external input (controllers, webhooks)
+gem "dry-validation"
+
+# Hexagonal infrastructure layer: container + auto-injection + typed structs
+gem "dry-container"
+gem "dry-auto_inject"
+gem "dry-struct"
+
 group :development, :test do
   gem "byebug"
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
@@ -90,4 +98,5 @@ group :test do
   gem "shoulda-matchers"
   gem "simplecov", require: false
   gem "database_cleaner-active_record"
+  gem "webmock"
 end

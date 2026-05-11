@@ -21,6 +21,18 @@
         class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
   </div>
 
+  <%# Description %>
+  <div>
+    <div class="flex items-center justify-between mb-1.5">
+      <label class="text-xs font-semibold uppercase tracking-wider text-forest/50">Descripción</label>
+      <span class="text-xs text-forest/40">Opcional</span>
+    </div>
+    <%= f.text_area :description, rows: 3,
+        placeholder: "Breve descripción que verá el cliente cuando pregunte por este servicio.",
+        class: "block w-full rounded-xl border border-cream-dark bg-white px-3.5 py-2.5 text-sm text-forest placeholder:text-forest/30 shadow-xs focus:border-brand focus:ring-2 focus:ring-brand/10 focus:outline-none" %>
+    <p class="text-xs text-forest/40 mt-1">Se muestra cuando un cliente pregunta por WhatsApp qué servicios ofreces.</p>
+  </div>
+
   <%# Duration %>
   <div>
     <%= f.label :duration_minutes, "Duración (minutos)", class: "block text-xs font-semibold uppercase tracking-wider text-forest/50 mb-1.5" %>

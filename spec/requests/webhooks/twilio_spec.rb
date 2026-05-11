@@ -52,16 +52,16 @@ RSpec.describe "Webhooks::Twilio", type: :request do
         expect(booking.reload).to be_confirmed
       end
 
-      it "creates an inbound MessageLog" do
+      it "creates an inbound MessageLog plus an outbound confirmation ack" do
         expect {
           post_twilio(from: "whatsapp:+5215512345678", body: "1")
-        }.to change(MessageLog, :count).by(1)
+        }.to change(MessageLog, :count).by(2)
 
-        log = MessageLog.last
-        expect(log.direction).to eq("inbound")
-        expect(log.channel).to eq("whatsapp")
-        expect(log.body).to eq("1")
-        expect(log.status).to eq("delivered")
+        inbound = MessageLog.inbound.last
+        expect(inbound.direction).to eq("inbound")
+        expect(inbound.channel).to eq("whatsapp")
+        expect(inbound.body).to eq("1")
+        expect(inbound.status).to eq("delivered")
       end
     end
 
@@ -71,10 +71,10 @@ RSpec.describe "Webhooks::Twilio", type: :request do
         expect(booking.reload).to be_cancelled
       end
 
-      it "creates an inbound MessageLog" do
+      it "creates an inbound MessageLog plus an outbound cancellation ack" do
         expect {
           post_twilio(from: "whatsapp:+5215512345678", body: "2")
-        }.to change(MessageLog, :count).by(1)
+        }.to change(MessageLog, :count).by(2)
       end
     end
 
@@ -85,10 +85,13 @@ RSpec.describe "Webhooks::Twilio", type: :request do
         }.not_to change { booking.reload.status }
       end
 
-      it "still logs the inbound message" do
+      it "logs the inbound message and sends a fallback so the bot is never silent" do
         expect {
           post_twilio(from: "whatsapp:+5215512345678", body: "hola")
-        }.to change(MessageLog, :count).by(1)
+        }.to change(MessageLog, :count).by(2)
+
+        outbound = MessageLog.outbound.last
+        expect(outbound.body).to include("Tienes una cita el")
       end
     end
 
@@ -122,7 +125,32 @@ RSpec.describe "Webhooks::Twilio", type: :request do
     end
 
     context "guided booking flow" do
+      include Dry::Monads[:result]
+
       let!(:owner) { create(:user, :owner, account: account, name: "Owner") }
+
+      def extractor_with_time(time)
+        Success({
+          slots:          { service: nil, starts_at: time, address: nil, confirmation: nil },
+          confidences:    { service: 0.0, datetime: 0.92, address: 0.0, confirmation: 0.0 },
+          top_candidates: [],
+          input_tokens:   80, output_tokens: 14, model: "test"
+        })
+      end
+
+      before do
+        account.update!(ai_nlu_enabled: true)
+        allow(Llm::GreetingGenerator).to receive(:call).and_return(Failure(:llm_error))
+        allow(Llm::QuestionClassifier).to receive(:call).and_return(Failure(:not_a_question))
+        allow(Llm::ScopeClassifier).to receive(:call).and_return(Failure(:not_out_of_scope))
+        allow(Llm::BookingSlotExtractor).to receive(:call).and_return(Failure(:llm_error))
+        allow(Llm::BookingSlotExtractor).to receive(:call)
+          .with(hash_including(body: "2026-04-26 15:00"))
+          .and_return(extractor_with_time(Time.zone.local(2026, 4, 26, 15, 0)))
+        allow(Llm::BookingSlotExtractor).to receive(:call)
+          .with(hash_including(body: "2026-04-27 15:00"))
+          .and_return(extractor_with_time(Time.zone.local(2026, 4, 27, 15, 0)))
+      end
 
       it "creates a booking for a new customer" do
         expect {

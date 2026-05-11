@@ -2,13 +2,12 @@
 
 ## Multi-Tenancy
 
-Row-level tenancy via `acts_as_tenant` scoped on `account_id`.
+Manual row-level tenancy scoped on `account_id`. No gem — all scoping is explicit in controllers and services.
 
 - `Account` is the tenant root — NOT scoped itself
-- `User` belongs_to Account via `account_id` — NOT acts_as_tenant (Devise handles auth cross-tenant; scoping is manual)
-- All other models use `acts_as_tenant(:account)` which automatically adds `account_id` WHERE clause to every query
-- `ActsAsTenant.require_tenant = true` globally in initializer — any query without an active tenant raises an error (security guarantee)
-- Background jobs use `ActsAsTenant.with_tenant(booking.account) { ... }` block
+- Dashboard controllers resolve the tenant via `current_user.account`
+- All tenant-scoped queries include an explicit `account_id:` condition or scope
+- Background jobs pass the account explicitly and scope queries manually
 
 ## Account Resolution
 
@@ -36,7 +35,7 @@ ActionController::Base (direct, no CSRF)
 
 All jobs follow the pattern:
 1. Find the record by ID (handle nil gracefully — job may be stale)
-2. Wrap in `ActsAsTenant.with_tenant(record.account)` block
+2. Scope all queries to `record.account` explicitly
 3. Do the work
 4. Log to `MessageLog` for WhatsApp sends (append-only audit trail)
 
@@ -89,6 +88,52 @@ Controller hierarchy addition:
 ActionController::Base (direct, no CSRF)
   └── Webhooks::GoogleCalendarController
 ```
+
+## Hexagonal Architecture — Infrastructure Layer (LLM pilot)
+
+The app uses a thin hexagonal layer for outbound I/O. ActiveRecord stays as the domain model; the boundary applies to external services only.
+
+### Files
+- `lib/citable/container.rb` — `Citable::Container` (dry-container) + `Citable::Import`
+- `lib/citable/types.rb` — `Citable::Types` (dry-types)
+- `app/infrastructure/llm/port.rb` — `Llm::Port` abstract contract; `Llm::Port::Error`
+- `app/infrastructure/llm/response.rb` — `Llm::Response` (Dry::Struct with content, input_tokens, output_tokens, model)
+- `app/infrastructure/llm/gemini_adapter.rb` — `Llm::GeminiAdapter < Llm::Port`; registered as `"infrastructure.llm"` in the container
+
+### Port contract
+Any adapter must implement `#call(system:, user:, schema:) → Llm::Response` and raise `Llm::Port::Error` on transport/parse failure. Shared contract specs live in `spec/infrastructure/llm/port_contract_spec.rb`.
+
+### Application service pattern (LLM)
+All three LLM application services (`Llm::NluParser`, `Llm::QuestionClassifier`, `Llm::GreetingGenerator`) follow the same shape:
+- Accept an optional `llm:` kwarg defaulting to `Citable::Container["infrastructure.llm"]`
+- Include `Dry::Monads[:result]`
+- Return **`Success(hash)`** on success (plain hash, never a Dry::Struct wrapper class) or **`Failure(:tag)`** on miss/error
+- **No intermediate Result struct classes** — the hash carries the domain value plus token metadata inline
+
+#### Hash shapes by service
+- `NluParser` — `{ value: <Time|Service|Symbol>, input_tokens:, output_tokens:, model: }`
+- `QuestionClassifier` — `{ intent: <Symbol>, service: <Service|nil>, input_tokens:, output_tokens:, model: }`
+- `GreetingGenerator` — `{ message: <String>, input_tokens:, output_tokens:, model: }`
+
+#### Failure tags
+- `:low_confidence` — LLM returned result below MIN_CONFIDENCE threshold
+- `:not_a_question` — classifier intent is booking/other (QuestionClassifier only)
+- `:blank_message` — LLM returned empty string (GreetingGenerator only)
+- `:llm_error` — `Llm::Port::Error` raised (timeout, transport, parse failure)
+
+### Caller convention
+Callers unwrap with `.success?` / `.value!`:
+```ruby
+nlu = Llm::NluParser.parse_service(body, services, account: account)
+if nlu.success?
+  record_ai_usage(nlu.value!)   # hash
+  service = nlu.value![:value]  # domain value
+end
+```
+`record_ai_usage` takes the plain hash and reads `[:input_tokens]`, `[:output_tokens]`, `[:model]`.
+
+### Testing
+Specs inject an `instance_double(Llm::Port)` via the `llm:` kwarg; no WebMock or container stubs needed for application-service tests. Container stubs (`Citable::Container.stub`) are available for integration tests via `spec/support/container_helpers.rb`.
 
 ## Key Indexes
 

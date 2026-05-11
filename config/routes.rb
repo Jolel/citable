@@ -32,6 +32,7 @@ Rails.application.routes.draw do
     resources :staff, only: %i[index show new create edit update destroy]
 
     resource :settings, only: %i[show update]
+    get "nlu_metrics", to: "nlu_metrics#index", as: :nlu_metrics
 
     resource :google_calendar, only: [], controller: "google_calendar" do
       delete :disconnect, on: :member
