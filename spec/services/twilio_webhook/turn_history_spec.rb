@@ -41,16 +41,29 @@ RSpec.describe TwilioWebhook::TurnHistory do
       end
     end
 
-    context "with logs older than WINDOW_DAYS" do
+    context "with logs older than 30 minutes" do
       before do
         create(:message_log, account: account, customer: customer,
                channel: "whatsapp", direction: "inbound",
-               body: "mensaje viejo", created_at: (TwilioWebhook::TurnHistory::WINDOW_DAYS + 1).days.ago)
+               body: "mensaje viejo", created_at: 31.minutes.ago)
       end
 
-      it "excludes old logs" do
+      it "excludes logs outside the 30-minute window" do
         turns = described_class.for(account: account, customer: customer)
         expect(turns).to be_empty
+      end
+    end
+
+    context "with logs inside the 30-minute window" do
+      before do
+        create(:message_log, account: account, customer: customer,
+               channel: "whatsapp", direction: "inbound",
+               body: "mensaje reciente", created_at: 25.minutes.ago)
+      end
+
+      it "includes logs from up to 30 minutes ago" do
+        turns = described_class.for(account: account, customer: customer)
+        expect(turns.map { |t| t[:body] }).to include("mensaje reciente")
       end
     end
 
@@ -77,13 +90,13 @@ RSpec.describe TwilioWebhook::TurnHistory do
       before do
         create(:message_log, account: account, customer: customer,
                channel: "whatsapp", direction: "inbound",
-               body: body_a, created_at: 30.minutes.ago)
+               body: body_a, created_at: 25.minutes.ago)
         create(:message_log, account: account, customer: customer,
                channel: "whatsapp", direction: "inbound",
-               body: body_b, created_at: 20.minutes.ago)
+               body: body_b, created_at: 15.minutes.ago)
         create(:message_log, account: account, customer: customer,
                channel: "whatsapp", direction: "inbound",
-               body: body_c, created_at: 10.minutes.ago)
+               body: body_c, created_at: 5.minutes.ago)
       end
 
       it "drops oldest turns to stay within the cap" do

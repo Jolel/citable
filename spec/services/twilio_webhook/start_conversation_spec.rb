@@ -191,6 +191,27 @@ RSpec.describe TwilioWebhook::StartConversation do
 
       call(customer: customer, body: nil)
     end
+
+    it "passes recent message history to the classifier" do
+      create(:message_log, account: account, customer: customer, channel: "whatsapp",
+             direction: "inbound", body: "antes pregunté el precio", status: "delivered",
+             created_at: 10.minutes.ago)
+      create(:message_log, account: account, customer: customer, channel: "whatsapp",
+             direction: "outbound", body: "El corte cuesta $250.", status: "sent",
+             created_at: 9.minutes.ago)
+
+      allow(Llm::QuestionClassifier).to receive(:call).and_return(
+        Success({ intent: :services_list, service: nil,
+                  input_tokens: 30, output_tokens: 8, model: Llm::GeminiAdapter::DEFAULT_MODEL })
+      )
+
+      call(customer: customer, body: "¿y la duración?")
+
+      expect(Llm::QuestionClassifier).to have_received(:call).with(
+        "¿y la duración?",
+        hash_including(history: array_including(hash_including(role: "user")))
+      )
+    end
   end
 
   # ─── profile_name path ──────────────────────────────────────────────────────

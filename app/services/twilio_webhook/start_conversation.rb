@@ -46,7 +46,8 @@ module TwilioWebhook
       return nil unless account.ai_nlu_enabled?
 
       services = account.services.active.order(:name)
-      result = Llm::QuestionClassifier.call(body, services:, account:)
+      history  = TurnHistory.for(account: account, customer: customer)
+      result   = Llm::QuestionClassifier.call(body, services:, account:, history: history)
       return nil unless result.success?
 
       hash = result.value!

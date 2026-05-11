@@ -10,11 +10,12 @@ module TwilioWebhook
   #   so the LLM can resolve "el mismo de siempre" or "como la vez pasada".
   #
   # Capped at TOTAL_CAP characters to limit prompt token spend.
-  # Only looks back WINDOW_DAYS days to avoid old-conversation bleed.
+  # Only looks back WINDOW (30 minutes) — matches WhatsappConversation::EXPIRATION_WINDOW
+  # so the LLM sees the same horizon a customer would perceive as "the current chat".
   module TurnHistory
     BODY_TRUNCATION = 280
     TOTAL_CAP       = 800
-    WINDOW_DAYS     = 30
+    WINDOW          = 30.minutes
 
     # @param account      [Account]
     # @param customer     [Customer, nil]
@@ -26,7 +27,7 @@ module TwilioWebhook
 
       logs = account.message_logs
                     .where(customer: customer, channel: "whatsapp")
-                    .where(created_at: WINDOW_DAYS.days.ago..)
+                    .where(created_at: WINDOW.ago..)
                     .order(created_at: :desc)
                     .limit(limit * 2)
                     .to_a

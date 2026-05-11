@@ -211,5 +211,25 @@ RSpec.describe TwilioWebhook::ProcessBookingReply do
       expect(log.ai_output_tokens).to eq(11)
       expect(log.ai_model).to eq("gemini")
     end
+
+    it "passes recent message history to the classifier" do
+      create(:message_log, account: account, customer: customer, channel: "whatsapp",
+             direction: "inbound", body: "¿cuánto cuesta el corte?", status: "delivered",
+             created_at: 10.minutes.ago)
+      create(:message_log, account: account, customer: customer, channel: "whatsapp",
+             direction: "outbound", body: "El corte cuesta $250.", status: "sent",
+             created_at: 9.minutes.ago)
+
+      allow(Llm::QuestionClassifier).to receive(:call).and_return(
+        Success(base_classifier_hash.merge(intent: :hours))
+      )
+
+      call(body: "¿y a qué hora abren?")
+
+      expect(Llm::QuestionClassifier).to have_received(:call).with(
+        "¿y a qué hora abren?",
+        hash_including(history: array_including(hash_including(role: "user")))
+      )
+    end
   end
 end
